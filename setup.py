@@ -11,7 +11,9 @@ setup(
         'matplotlib',
         'scipy',
         'seaborn',
-        'scikit-learn'
+        'scikit-learn',
+        'prophet==1.1.1',
+        'holidays==0.24'
     ],
     python_requires='>=3.8',
     author='David Nguyen',
