@@ -22,7 +22,7 @@ def calculate_scaling_factor(fig_width, fig_height, base_size=BASE_SIZE):
 
 
 def configure_axis(
-    ax, xlabel="", ylabel="", title="", scaling_factor=1, fontsize_base=15
+    ax, xlabel="", ylabel="", title="", scaling_factor=1, fontsize_base=18
 ):
     """
     Configure the axis labels, ticks, and title.
@@ -49,7 +49,7 @@ def configure_axis(
     ax.spines["top"].set_visible(False)
 
 
-def configure_legend(ax, scaling_factor=1, fontsize_base=15):
+def configure_legend(ax, scaling_factor=1, fontsize_base=18):
     """
     Configure the legend.
 
@@ -58,7 +58,7 @@ def configure_legend(ax, scaling_factor=1, fontsize_base=15):
     - scaling_factor (float): Scaling factor for font sizes.
     - fontsize_base (int): Base font size.
     """
-    legend_fontsize = fontsize_base * scaling_factor * 0.9
+    legend_fontsize = fontsize_base * scaling_factor * 1
     ax.legend(fontsize=legend_fontsize, frameon=False)
 
 
@@ -70,7 +70,7 @@ def base_plot(
     ylabel="",
     title="",
     scaling_factor=1,
-    fontsize_base=15,
+    fontsize_base=18,
     **kwargs
 ):
     """
@@ -106,6 +106,7 @@ def plot_single_graph(
     title="Single Graph",
     xlabel="X-axis",
     ylabel="Y-axis",
+    line_label="Data",
     figsize=(11.7, 8.27),
     **kwargs
 ):
@@ -131,7 +132,7 @@ def plot_single_graph(
     base_plot(
         ax,
         data,
-        label="Data",
+        label=line_label,
         xlabel=xlabel,
         ylabel=ylabel,
         title=title,

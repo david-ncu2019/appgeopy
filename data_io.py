@@ -1,4 +1,6 @@
+import json
 import os
+
 import pandas as pd
 from openpyxl import load_workbook
 
@@ -136,3 +138,72 @@ def save_df_to_excel(
 
     except Exception as e:
         print(f"An error occurred while writing to the Excel file: {e}")
+
+
+def save_dict_to_json(
+    dictionary, folder_path, file_name, indent=4, sort_keys=True, overwrite=True
+):
+    """
+    Save a Python dictionary to a JSON file.
+
+    Args:
+    dictionary (dict): The Python dictionary to be saved.
+    folder_path (str): The path to the folder where the JSON file will be saved.
+    file_name (str): The name of the JSON file (without extension).
+    indent (int, optional): The indentation level of the JSON file. Defaults to 4.
+    sort_keys (bool, optional): Whether to sort the keys in the JSON file. Defaults to True.
+    overwrite (bool, optional): Whether to overwrite an existing file with the same name. Defaults to True.
+
+    Returns:
+    str: The path to the saved JSON file.
+    """
+    if not isinstance(dictionary, dict):
+        raise ValueError("The 'dictionary' parameter must be a dictionary.")
+
+    if not os.path.isdir(folder_path):
+        os.makedirs(folder_path)
+
+    file_path = os.path.join(folder_path, f"{file_name}.json")
+
+    if not overwrite and os.path.exists(file_path):
+        raise FileExistsError(
+            f"The file '{file_path}' already exists and overwrite is set to False."
+        )
+
+    with open(file_path, "w") as json_file:
+        json.dump(dictionary, json_file, indent=indent, sort_keys=sort_keys)
+
+    return file_path
+
+
+def read_json_to_dict(file_path):
+    """
+    Read a JSON file and convert its contents to a Python dictionary.
+
+    Args:
+    file_path (str): The path to the JSON file to be read.
+
+    Returns:
+    dict: The contents of the JSON file as a Python dictionary.
+
+    Raises:
+    FileNotFoundError: If the file does not exist.
+    ValueError: If the file contents are not valid JSON.
+    """
+    if not os.path.isfile(file_path):
+        raise FileNotFoundError(f"The file '{file_path}' does not exist.")
+
+    with open(file_path, "r") as json_file:
+        try:
+            dictionary = json.load(json_file)
+        except json.JSONDecodeError as e:
+            raise ValueError(
+                f"Error decoding JSON from the file '{file_path}': {e}"
+            )
+
+    if not isinstance(dictionary, dict):
+        raise ValueError(
+            f"The file '{file_path}' does not contain a valid dictionary."
+        )
+
+    return dictionary
