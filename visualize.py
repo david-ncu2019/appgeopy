@@ -209,6 +209,15 @@ def plot_three_subplots(
     fig.tight_layout(rect=[0, 0.03, 1, 0.95])
     return fig, axes
 
+def save_figure(fig, savepath, dpi):
+    fig.savefig(
+        savepath,
+        dpi=dpi,
+        transparent=False,
+        facecolor="w",
+        edgecolor="w",
+        bbox_inches="tight",
+    )
 
 # def plot_custom_subplots(
 #     df,

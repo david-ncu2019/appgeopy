@@ -25,4 +25,8 @@ def fulltime_table(df, fulltime_series):
 	else:
 		sys.exit("Data types of DataFrame indexes and input series do not match")
 
+def convert_to_datetime(colname):
+	if "N" in colname:
+		colname = colname[1:]
 
+	return pd.to_datetime(colname)
