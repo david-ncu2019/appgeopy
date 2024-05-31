@@ -1,7 +1,20 @@
 import numpy as np
 import pandas as pd
+from numpy.fft import fft, fftfreq, ifft  # Fast Fourier Transform functions
+from scipy.signal import find_peaks
 from sklearn.linear_model import RANSACRegressor
-from numpy.fft import fft, ifft, fftfreq  # Fast Fourier Transform functions
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+# Function to find peaks and troughs using scipy
+def find_peaks_troughs(data_series):
+    peaks, _ = find_peaks(data_series)
+    troughs, _ = find_peaks(-data_series)
+    return peaks, troughs
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
 def get_linear_trend(series):
@@ -80,7 +93,7 @@ def find_seasonality(time_series_data, target_column, interval=1):
                 "Amplitude": amplitudes,
                 "Frequency": frequencies,
                 "Phase": phases,
-                "Period (days)": periods_in_days,
+                "Periods": periods_in_days,
             }
         )
         .sort_values(by="Amplitude", ascending=False)
@@ -92,7 +105,10 @@ def find_seasonality(time_series_data, target_column, interval=1):
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-def correct_phase_shift(original_dataframe, reconstructed_series, target_column):
+
+def correct_phase_shift(
+    original_dataframe, reconstructed_series, target_column
+):
     """
     Correct the phase shift between the original and reconstructed time series.
 
@@ -115,18 +131,24 @@ def correct_phase_shift(original_dataframe, reconstructed_series, target_column)
     min_length = min(original_length, reconstructed_length)
 
     # Truncate both signals to the minimum length
-    truncated_original_signal = original_dataframe[target_column][:min_length].values
+    truncated_original_signal = original_dataframe[target_column][
+        :min_length
+    ].values
     truncated_reconstructed_signal = reconstructed_series[:min_length]
 
     # Removing the mean from each signal
-    mean_adjusted_original_signal = truncated_original_signal - np.mean(truncated_original_signal)
-    mean_adjusted_reconstructed_signal = truncated_reconstructed_signal - np.mean(
-        truncated_reconstructed_signal
+    mean_adjusted_original_signal = truncated_original_signal - np.mean(
+        truncated_original_signal
+    )
+    mean_adjusted_reconstructed_signal = (
+        truncated_reconstructed_signal - np.mean(truncated_reconstructed_signal)
     )
 
     # Compute cross-correlation
     correlation = np.correlate(
-        mean_adjusted_original_signal, mean_adjusted_reconstructed_signal, mode="full"
+        mean_adjusted_original_signal,
+        mean_adjusted_reconstructed_signal,
+        mode="full",
     )
 
     # Find the index of maximum correlation
@@ -137,7 +159,9 @@ def correct_phase_shift(original_dataframe, reconstructed_series, target_column)
     shift = max_corr_index - expected_max_corr_index
 
     # Correct the phase shift in the reconstructed signal
-    corrected_reconstructed_series = np.roll(truncated_reconstructed_signal, -shift)
+    corrected_reconstructed_series = np.roll(
+        truncated_reconstructed_signal, -shift
+    )
 
     return corrected_reconstructed_series
 

@@ -8,3 +8,4 @@ from .smoothing import *
 from .data_io import *
 from .visualize import *
 from .modeling import *
+from .geospatial import *
