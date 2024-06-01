@@ -1,5 +1,5 @@
 import warnings  # Warning control
-
+import pandas as pd
 import geopandas as gpd
 from pyproj import CRS
 from shapely.geometry import Point
@@ -60,7 +60,7 @@ def convert_to_geodata(
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
-def find_points_within_buffer(
+def find_point_neighbors(
     central_point, target_points_gdf, central_key_column, buffer_radius
 ):
     """
@@ -84,7 +84,7 @@ def find_points_within_buffer(
 
     # Apply the point_within_buffer function to each row of central_gdf
     results = central_gdf.apply(
-        lambda row: point_within_buffer(row, target_points_gdf, central_key_column, buffer_radius), axis=1
+        lambda row: point_within_buffer(row, target_points_gdf, central_key_colum,n buffer_radius), axis=1
     )
 
     # Concatenate the results into a single GeoDataFrame
@@ -102,6 +102,15 @@ def find_points_within_buffer(
     selected_points = target_points_gdf[filter_cond].copy()
 
     # Assign the central point's key value to the target points
-    selected_points[central_key_column] = key_value
+    key_value_series = pd.Series(
+        data=[key_value] * len(selected_points), index=selected_points.index
+    )
+    selected_points.insert(
+        loc=len(selected_points.columns)-1,
+        column=central_key_column,
+        value=key_value_series,
+    )
+
+    # selected_points[central_key_column] = key_value
 
     return selected_points
