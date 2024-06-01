@@ -2,6 +2,59 @@ import numpy as np
 import pandas as pd
 from scipy.optimize import least_squares
 
+
+def synthetic_daily_signal(
+    start_date: str = "2020-01-01",
+    end_date: str = "2024-12-31",
+    linear_slope: float = 0.0,
+    amplitude_list: List[float] = [1.0],
+    period_list: List[float] = [1.0],
+    variance: float = 0.01,
+    random_seed: int = 42
+) -> pd.DataFrame:
+    """
+    Generate synthetic time-series data with multiple sinusoidal components,
+    a linear trend, and random noise.
+
+    Parameters:
+    start_date (str): Start date of the time-series in 'YYYY-MM-DD' format.
+    end_date (str): End date of the time-series in 'YYYY-MM-DD' format.
+    linear_slope (float): Slope of the linear trend component.
+    amplitude_list (List[float]): List of amplitudes for the sinusoidal components.
+    period_list (List[float]): List of periods (in years) for the sinusoidal components.
+    variance (float): Variance of the random noise component.
+    random_seed (int): Seed for the random number generator.
+
+    Returns:
+    pd.DataFrame: DataFrame containing the generated time-series data.
+    """
+    np.random.seed(random_seed)
+    dates = pd.date_range(start=start_date, end=end_date, freq="D")
+    days = (dates - dates[0]).days
+    PI = np.pi
+
+    # Create the seasonal component using numpy vectorization
+    seasonal_component = np.sum(
+        [
+            amp * np.sin(2 * PI * days / (period * 365.25))
+            for amp, period in zip(amplitude_list, period_list)
+        ],
+        axis=0
+    )
+
+    # Create a trend component
+    trend_component = linear_slope * days
+
+    # Create a random noise component
+    noise_component = np.random.normal(scale=variance, size=len(dates))
+
+    # Combine all components to create the time-series data
+    data = seasonal_component + trend_component + noise_component
+
+    return pd.DataFrame({"date": dates, "value": data}).set_index("date")
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
 def sinusoidal_model(time_values, amplitude_terms, baseline):
     """
     Construct a sinusoidal model based on time, amplitude terms, and a baseline value.
