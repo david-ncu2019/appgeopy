@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from scipy.optimize import least_squares
+from typing import List
 
 
 def synthetic_daily_signal(
