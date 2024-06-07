@@ -1,17 +1,87 @@
+from typing import List, Tuple
+
 import numpy as np
 import pandas as pd
+import scipy
 from numpy.fft import fft, fftfreq, ifft  # Fast Fourier Transform functions
-from scipy.signal import find_peaks
 from sklearn.linear_model import RANSACRegressor
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+
+def find_peaks_troughs(data_series: pd.Series) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Find peaks and troughs in a time-series data.
+
+    Parameters:
+    data_series (pd.Series): The time-series data.
+
+    Returns:
+    Tuple[np.ndarray, np.ndarray]: Indices of the peaks and troughs.
+    """
+    if not isinstance(data_series, pd.Series):
+        raise ValueError("Input data_series must be a pandas Series.")
+
+    if data_series.isnull().any():
+        raise ValueError(
+            "Input data_series contains NaN values. Please handle them before using this function."
+        )
+
+    peaks, _ = scipy.signal.find_peaks(data_series)
+    troughs, _ = scipy.signal.find_peaks(-data_series)
+    return peaks, troughs
 
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-# Function to find peaks and troughs using scipy
-def find_peaks_troughs(data_series):
-    peaks, _ = find_peaks(data_series)
-    troughs, _ = find_peaks(-data_series)
-    return peaks, troughs
+
+def find_peak_to_peak(
+    df: pd.DataFrame, peak_idx: List[int], trough_idx: List[int]
+) -> pd.DataFrame:
+    """
+    Find the peak-to-peak values in the time-series data.
+
+    Parameters:
+    df (pd.DataFrame): The time-series data with datetime index.
+    peak_idx (List[int]): Indices of the peaks.
+    trough_idx (List[int]): Indices of the troughs.
+
+    Returns:
+    pd.DataFrame: DataFrame with peak and trough dates and values.
+    """
+    if not isinstance(df, pd.DataFrame):
+        raise ValueError("Input df must be a pandas DataFrame.")
+
+    if not isinstance(df.index, pd.DatetimeIndex):
+        raise ValueError("DataFrame index must be a DatetimeIndex.")
+
+    if df.shape[1] != 1:
+        raise ValueError("DataFrame must have a single column of data.")
+
+    # if any(idx >= len(df) or idx < 0 for idx in peak_idx + trough_idx):
+    #     raise IndexError(
+    #         "Peak or trough indices are out of bounds of the DataFrame."
+    #     )
+
+    if df.isnull().any().any():
+        raise ValueError(
+            "Input DataFrame contains NaN values. Please handle them before using this function."
+        )
+
+    peak_dates = df.iloc[peak_idx].idxmax()[0]
+    trough_dates = df.iloc[trough_idx].idxmin()[0]
+    peak_values = df.iloc[peak_idx].max()[0]
+    trough_values = df.iloc[trough_idx].min()[0]
+
+    data_cache = {
+        "date": [peak_dates, trough_dates],
+        "value": [peak_values, trough_values],
+    }
+
+    result_df = pd.DataFrame(data_cache).set_index("date")
+    result_df = result_df.sort_values(by="value", ascending=False)
+    
+    return result_df
 
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

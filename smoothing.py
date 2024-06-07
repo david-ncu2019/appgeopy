@@ -55,3 +55,5 @@ def simple_moving_average(num_arr, window_size=7):
         window_average_cache.append(window_average)
 
     return window_average_cache
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

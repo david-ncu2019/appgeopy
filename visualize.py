@@ -65,7 +65,7 @@ def configure_legend(ax, scaling_factor=1, fontsize_base=18):
 def base_plot(
     ax,
     data,
-    label,
+    label="",
     xlabel="",
     ylabel="",
     title="",
