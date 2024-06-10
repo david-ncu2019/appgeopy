@@ -30,3 +30,46 @@ def get_LOS_disp(dN, dE, dU, incidence_angle=37, heading_angle=347.6):
     )
 
     return LOS_disp
+
+
+def compare_LOS_disp(psc_df, gps_df, mutual_index):
+    """
+    Compare Line-of-Sight (LOS) displacements between Persistent Scatterers (PSInSAR) and GPS measurements.
+
+    Args:
+        psc_df (pd.DataFrame): DataFrame containing displacements of persistent scatterers (PSInSAR).
+        gps_df (pd.DataFrame): DataFrame containing GPS station measurements.
+        mutual_index (pd.Index or list): Index or list of indices that both `psc_df` and `gps_df` have in common.
+
+    Returns:
+        pd.DataFrame: A DataFrame with the difference in LOS displacements between GPS and PSInSAR measurements for the mutual index.
+
+    Raises:
+        ValueError: If `mutual_index` is not in both DataFrames.
+        TypeError: If inputs are not valid pandas DataFrames or if `mutual_index` is not a valid index type.
+    """
+    import pandas as pd
+
+    # Type checking
+    if not isinstance(psc_df, pd.DataFrame) or not isinstance(gps_df, pd.DataFrame):
+        raise TypeError("Both `psc_df` and `gps_df` must be pandas DataFrames.")
+    
+    if not isinstance(mutual_index, (pd.Index, list)):
+        raise TypeError("`mutual_index` must be a pandas Index or a list of indices.")
+
+    # Check if the mutual index exists in both DataFrames
+    if not set(mutual_index).issubset(psc_df.index) or not set(mutual_index).issubset(gps_df.index):
+        raise ValueError("The `mutual_index` must be present in both `psc_df` and `gps_df`.")
+
+    # Ensure no missing values in the mutual index for both DataFrames
+    mutual_index = pd.Index(mutual_index)
+    psc_by_idx = psc_df.loc[mutual_index]
+    gps_by_idx = gps_df.loc[mutual_index]
+
+    if psc_by_idx.empty or gps_by_idx.empty:
+        raise ValueError("No common index found after dropping missing values.")
+
+    # Calculate the difference in LOS displacements
+    diff = gps_by_idx - psc_by_idx
+
+    return diff

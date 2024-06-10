@@ -1,9 +1,14 @@
+import logging
+import os
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
 # A4 paper size in inches (landscape)
 BASE_SIZE = (11.7, 8.27)
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
 def calculate_scaling_factor(fig_width, fig_height, base_size=BASE_SIZE):
@@ -19,6 +24,9 @@ def calculate_scaling_factor(fig_width, fig_height, base_size=BASE_SIZE):
     - float: Scaling factor.
     """
     return (fig_width * fig_height) / (base_size[0] * base_size[1])
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
 def configure_axis(
@@ -49,6 +57,9 @@ def configure_axis(
     ax.spines["top"].set_visible(False)
 
 
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+
 def configure_legend(ax, scaling_factor=1, fontsize_base=18):
     """
     Configure the legend.
@@ -62,6 +73,9 @@ def configure_legend(ax, scaling_factor=1, fontsize_base=18):
     ax.legend(fontsize=legend_fontsize, frameon=False)
 
 
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+
 def base_plot(
     ax,
     data,
@@ -71,7 +85,7 @@ def base_plot(
     title="",
     scaling_factor=1,
     fontsize_base=18,
-    **kwargs
+    **kwargs,
 ):
     """
     Base plotting function to handle common plotting features.
@@ -101,6 +115,9 @@ def base_plot(
     )
 
 
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+
 def plot_single_graph(
     data,
     title="Single Graph",
@@ -108,7 +125,7 @@ def plot_single_graph(
     ylabel="Y-axis",
     line_label="Data",
     figsize=(11.7, 8.27),
-    **kwargs
+    **kwargs,
 ):
     """
     Plot a single graph.
@@ -137,11 +154,14 @@ def plot_single_graph(
         ylabel=ylabel,
         title=title,
         scaling_factor=scaling_factor,
-        **kwargs
+        **kwargs,
     )
     fig.autofmt_xdate(rotation=90, ha="center")
     plt.tight_layout()
     return fig, ax
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
 def plot_three_subplots(
@@ -151,7 +171,7 @@ def plot_three_subplots(
     colors=None,
     figsize=(11.7, 8.27),
     suptitle="Three Subplots",
-    **kwargs
+    **kwargs,
 ):
     """
     Plot three subplots.
@@ -200,25 +220,180 @@ def plot_three_subplots(
             ylabel=ylabel,
             scaling_factor=scaling_factor,
             color=color,
-            **kwargs
+            **kwargs,
         )
         if i < len(axes) - 1:
             ax.set_xticklabels([])
 
-    fig.suptitle(suptitle, fontsize=18 * scaling_factor * 1.5, y=0.925, fontweight='bold')
+    fig.suptitle(
+        suptitle, fontsize=18 * scaling_factor * 1.5, y=0.925, fontweight="bold"
+    )
     fig.autofmt_xdate(rotation=90, ha="center")
     fig.tight_layout(rect=[0, 0.03, 1, 0.95])
     return fig, axes
 
-def save_figure(fig, savepath, dpi):
-    fig.savefig(
-        savepath,
-        dpi=dpi,
-        transparent=False,
-        facecolor="w",
-        edgecolor="w",
-        bbox_inches="tight",
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+
+def save_figure(
+    fig,
+    savepath,
+    dpi=300,
+    transparent=False,
+    facecolor="w",
+    edgecolor="w",
+    bbox_inches="tight",
+):
+    """
+    Save a matplotlib figure to the specified file path with enhanced options.
+
+    Parameters:
+    - fig: matplotlib.figure.Figure
+        The figure object to save.
+    - savepath: str
+        The full file path where the figure will be saved.
+    - dpi: int, optional (default=300)
+        The resolution of the saved figure in dots per inch.
+    - transparent: bool, optional (default=False)
+        Whether to make the figure background transparent.
+    - facecolor: str, optional (default="w")
+        The background color of the figure.
+    - edgecolor: str, optional (default="w")
+        The edge color of the figure.
+    - bbox_inches: str or None, optional (default="tight")
+        Bounding box in inches: 'tight' fits the figure tightly, None uses default padding.
+
+    Returns:
+    - None
+    """
+
+    # Validate file extension
+    valid_extensions = [
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".pdf",
+        ".svg",
+        ".tiff",
+        ".eps",
+    ]
+    file_extension = os.path.splitext(savepath)[-1].lower()
+    if file_extension not in valid_extensions:
+        raise ValueError(
+            f"Invalid file extension: '{file_extension}'. Supported extensions are {valid_extensions}"
+        )
+
+    try:
+        # Save the figure with specified parameters
+        fig.savefig(
+            savepath,
+            dpi=dpi,
+            transparent=transparent,
+            facecolor=facecolor,
+            edgecolor=edgecolor,
+            bbox_inches=bbox_inches,
+        )
+        # logging.info(f"Figure saved successfully at '{savepath}'")
+        # print(f"Figure saved successfully at '{savepath}'")
+    except Exception as e:
+        logging.error(f"Failed to save figure at '{savepath}': {e}")
+        print(f"Failed to save figure at '{savepath}': {e}")
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+
+def plot_stem(
+    data,
+    title="Stem Plot",
+    xlabel="X-axis",
+    ylabel="Y-axis",
+    figsize=(11.7, 8.27),
+    markerfmt="o",
+    linefmt="-",
+    basefmt=" ",
+    **kwargs,
+):
+"""
+    Plot a stem plot to highlight deviations or anomalies in a time series.
+
+    Parameters:
+    - data (pd.Series): Time-series data to plot.
+    - title (str): Title of the plot.
+    - xlabel (str): Label for the X-axis.
+    - ylabel (str): Label for the Y-axis.
+    - figsize (tuple): Size of the figure, defaulting to A4 landscape (11.7 x 8.27 inches).
+    - markerfmt (str): Format string for the markers.
+                      Examples:
+                      - 'o' for circle markers (default)
+                      - '^' for triangle markers
+                      - 's' for square markers
+    - linefmt (str): Format string for the lines.
+                    Examples:
+                    - '-' for solid lines (default)
+                    - '--' for dashed lines
+                    - '-.' for dash-dot lines
+    - basefmt (str): Format string for the baseline.
+                    Examples:
+                    - ' ' for no baseline (default)
+                    - 'k-' for a solid black baseline
+                    - 'r--' for a dashed red baseline
+    - kwargs: Additional keyword arguments for customization, passed to `ax.stem`.
+
+    Returns:
+    - fig (matplotlib.figure.Figure): The figure object.
+    - ax (matplotlib.axes.Axes): The axes object.
+
+    Example usage:
+    ```
+    # Generate sample time-series data
+    dates = pd.date_range(start='2024-01-01', periods=100, freq='D')
+    values = np.random.randn(100).cumsum()
+    sample_data = pd.Series(values, index=dates)
+
+    # Plot the stem plot with custom marker, line, and baseline formats
+    fig, ax = plot_stem(
+        sample_data,
+        title="Custom Stem Plot",
+        xlabel="Date",
+        ylabel="Cumulative Sum",
+        markerfmt='^',       # Triangle markers
+        linefmt='r-.',       # Red dash-dot lines
+        basefmt='k-'         # Solid black baseline
     )
+    plt.show()
+    ```
+    """
+    fig_width, fig_height = figsize
+    scaling_factor = calculate_scaling_factor(fig_width, fig_height)
+
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
+    ax.stem(
+        data.index,
+        data.values,
+        markerfmt=markerfmt,
+        linefmt=linefmt,
+        basefmt=basefmt,
+        **kwargs,
+    )
+
+    configure_axis(
+        ax,
+        xlabel=xlabel,
+        ylabel=ylabel,
+        title=title,
+        scaling_factor=scaling_factor,
+        fontsize_base=18,
+    )
+
+    # Customize grid for better visual clarity
+    ax.grid(True, which="both", linestyle="--", linewidth=0.5)
+    fig.autofmt_xdate(rotation=90, ha="center")
+    plt.tight_layout()
+
+    return fig, ax
+
 
 # def plot_custom_subplots(
 #     df,

@@ -82,9 +82,9 @@ def find_point_neighbors(
 
     Example:
 
-    # Apply the point_within_buffer function to each row of central_gdf
+    # Apply the find_point_neighbors function to each row of central_gdf
     results = central_gdf.apply(
-        lambda row: point_within_buffer(row, target_points_gdf, central_key_colum,n buffer_radius), axis=1
+        lambda row: find_point_neighbors(row, target_points_gdf, central_key_colum, buffer_radius), axis=1
     )
 
     # Concatenate the results into a single GeoDataFrame

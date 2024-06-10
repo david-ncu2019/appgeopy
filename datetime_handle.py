@@ -30,3 +30,37 @@ def convert_to_datetime(colname):
 		colname = colname[1:]
 
 	return pd.to_datetime(colname)
+
+
+def intersect_time_index(df1_index, df2_index):
+    """
+    Finds the intersection of two time indices.
+
+    Args:
+        df1_index (iterable): An iterable of time indices (e.g., list, set, pandas Index) for the first dataset.
+        df2_index (iterable): An iterable of time indices (e.g., list, set, pandas Index) for the second dataset.
+
+    Returns:
+        list: A sorted list of the common elements in both time indices.
+
+    Raises:
+        TypeError: If either input is not an iterable.
+        ValueError: If either input is empty.
+    """
+    try:
+        # Ensure inputs are iterables that can be converted to sets
+        _a = set(df1_index)
+        _b = set(df2_index)
+    except TypeError as e:
+        raise TypeError("Both inputs must be iterables (e.g., list, set, pandas Index).") from e
+
+    if not _a:
+        raise ValueError("The first input time index is empty.")
+    if not _b:
+        raise ValueError("The second input time index is empty.")
+    
+    # Find intersection and sort the result
+    intersection = sorted(list(_a.intersection(_b)))
+
+    return intersection
+
