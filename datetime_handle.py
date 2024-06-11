@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import sys
+import os
 
 def get_fulltime(series, freq='D'):
 	try:
@@ -11,6 +12,7 @@ def get_fulltime(series, freq='D'):
 	except Exception as e:
 		raise ValueError(f"{e}")
 
+# ------------------------------------------------------------------------------
 
 def fulltime_table(df, fulltime_series):
 	if type(df.index[0])==type(fulltime_series[0]):
@@ -25,12 +27,15 @@ def fulltime_table(df, fulltime_series):
 	else:
 		sys.exit("Data types of DataFrame indexes and input series do not match")
 
+# ------------------------------------------------------------------------------
+
 def convert_to_datetime(colname):
 	if "N" in colname:
 		colname = colname[1:]
 
 	return pd.to_datetime(colname)
 
+# ------------------------------------------------------------------------------
 
 def intersect_time_index(df1_index, df2_index):
     """
@@ -64,3 +69,30 @@ def intersect_time_index(df1_index, df2_index):
 
     return intersection
 
+# ------------------------------------------------------------------------------
+
+def extract_datetime_from_mfile(mfile):
+    """
+    Extract unique datetime components from filenames in a specified mfile.
+
+    Parameters:
+    - mfile (str): Path to the mfile containing list of filenames.
+
+    Returns:
+    - list: Sorted list of unique datetime components extracted from filenames.
+    """
+    
+    # Read lines from the mfile and strip whitespace/newline characters
+    with open(mfile, "r") as input_file:
+        lines = [line.strip() for line in input_file]
+    
+    # Extract basenames (without extension) from the lines
+    basenames = [os.path.basename(os.path.splitext(line)[0]) for line in lines]
+    
+    # Use a set comprehension to collect unique datetime components
+    datetimes = {"N"+name.split("_")[-2][3:] for name in basenames}.union({"N"+name.split("_")[-1][3:] for name in basenames})
+    
+    # Return a sorted list of unique datetime components
+    return sorted(datetimes)
+
+# ------------------------------------------------------------------------------

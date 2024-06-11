@@ -4,6 +4,8 @@ def degree_to_radian(degree):
     rad = degree * pi / 180
     return rad
 
+# ------------------------------------------------------------------------------
+
 def get_LOS_disp(dN, dE, dU, incidence_angle=37, heading_angle=347.6):
     """
     Calculates the line-of-sight (LOS) displacement for a given set of north, east, and up displacement components, as well as an incidence angle and heading angle.
@@ -31,6 +33,7 @@ def get_LOS_disp(dN, dE, dU, incidence_angle=37, heading_angle=347.6):
 
     return LOS_disp
 
+# ------------------------------------------------------------------------------
 
 def compare_LOS_disp(psc_df, gps_df, mutual_index):
     """
@@ -73,3 +76,35 @@ def compare_LOS_disp(psc_df, gps_df, mutual_index):
     diff = gps_by_idx - psc_by_idx
 
     return diff
+
+# ------------------------------------------------------------------------------
+
+def convert_cumdisp_to_disp(cumulative_series):
+    """
+    Convert a series of cumulative displacement values into individual displacement values.
+    
+    Each element in the returned series represents the displacement from the previous element.
+    The first value remains unchanged, as there is no preceding element to calculate the difference.
+
+    Args:
+    - cumulative_series (pd.Series): A pandas Series representing cumulative displacement values.
+
+    Returns:
+    - pd.Series: A new Series where the first value is the same as in the input series,
+                 and each subsequent value is the difference between the current and the previous value.
+    """
+    # Create a copy of the input series to avoid modifying the original data.
+    displacement_series = cumulative_series.copy()
+
+    # Shift the series up by one index to align current and previous values.
+    shifted_series = cumulative_series.shift(-1)
+
+    # Calculate the difference between the shifted series and the original series.
+    differences = shifted_series - cumulative_series
+
+    # Set the first value of the displacement series as the first value of the cumulative series.
+    # Assign the calculated differences to the displacement series, skipping the first element.
+    displacement_series[1:] = differences[:-1]
+
+    return displacement_series
+

@@ -315,7 +315,7 @@ def plot_stem(
     basefmt=" ",
     **kwargs,
 ):
-"""
+    """
     Plot a stem plot to highlight deviations or anomalies in a time series.
 
     Parameters:
@@ -363,7 +363,6 @@ def plot_stem(
         basefmt='k-'         # Solid black baseline
     )
     plt.show()
-    ```
     """
     fig_width, fig_height = figsize
     scaling_factor = calculate_scaling_factor(fig_width, fig_height)
