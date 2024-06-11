@@ -1,7 +1,7 @@
 import shapefile as sf
 import numpy as np
 import pandas as pd
-from ts_disp import *
+from .ts_disp import *
 
 # ------------------------------------------------------------------------------
 
