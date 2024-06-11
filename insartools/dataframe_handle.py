@@ -1,7 +1,7 @@
 import shapefile as sf
 import numpy as np
 import pandas as pd
-from .ts_disp import *
+from .ts_disp import convert_cumdisp_to_disp
 
 # ------------------------------------------------------------------------------
 
@@ -50,7 +50,7 @@ def modify_ras2ptatt_shp(shp_fpath, datetime_list, xcoord_colname, ycoord_colnam
     # Create new field names for the modified DataFrame
     # ------------------------------------------------------------------------------
     # Combine the x and y column names with the datetime strings, excluding the initial date
-    fieldnames = [xcoord_colname, ycoord_colname] + datetime_list[1:]
+    fieldnames = [xcoord_colname, ycoord_colname] + datetime_list
 
     # ------------------------------------------------------------------------------
     # Create a dictionary to store the records with new field names
@@ -92,11 +92,11 @@ def cumdisp_to_disp_dataframe(cumdisp_dataframe, datetime_list):
     # Select columns corresponding to the provided datetime list
     df_by_datetime = cumdisp_dataframe.loc[:, datetime_list]
 
+    displacement_df = df_by_datetime - df_by_datetime.shift(1, axis=1)
+    displacement_df.iloc[:, 0] = df_by_datetime.iloc[:, 0]
+
     # Find the index of the first date column in the DataFrame
     idx_first_date = list(cumdisp_dataframe.columns).index(datetime_list[0])
-
-    # Apply the conversion function to each row (axis=1) to calculate displacement values
-    displacement_df = df_by_datetime.apply(convert_cumulative_to_displacement, axis=1)
 
     # Concatenate the displacement DataFrame with the initial part of the cumulative displacement DataFrame
     return pd.concat([cumdisp_dataframe.iloc[:, :idx_first_date], displacement_df], axis=1)
