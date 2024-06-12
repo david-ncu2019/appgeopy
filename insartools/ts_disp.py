@@ -74,8 +74,8 @@ def compare_LOS_disp(psc_df, gps_df, mutual_index):
     # Calculate the difference in LOS displacements
     diff = gps_by_idx - psc_by_idx
 
-    gps_by_idx = gps_by_idx.rename({"LOS(mm)":"GPS(mm)"})
-    psc_by_idx = psc_by_idx.rename({"LOS(mm)":"InSAR(mm)"})
+    gps_by_idx = gps_by_idx.rename(column={"LOS(mm)":"GPS(mm)"})
+    psc_by_idx = psc_by_idx.rename(column={"LOS(mm)":"InSAR(mm)"})
 
     merge = pd.concat([gps_by_idx, psc_by_idx], axis=1)
 
