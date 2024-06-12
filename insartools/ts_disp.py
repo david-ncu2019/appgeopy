@@ -64,7 +64,6 @@ def compare_LOS_disp(psc_df, gps_df, mutual_index):
     if not set(mutual_index).issubset(psc_df.index) or not set(mutual_index).issubset(gps_df.index):
         raise ValueError("The `mutual_index` must be present in both `psc_df` and `gps_df`.")
 
-    # Ensure no missing values in the mutual index for both DataFrames
     mutual_index = pd.Index(mutual_index)
     psc_by_idx = psc_df.loc[mutual_index]
     gps_by_idx = gps_df.loc[mutual_index]
@@ -75,7 +74,12 @@ def compare_LOS_disp(psc_df, gps_df, mutual_index):
     # Calculate the difference in LOS displacements
     diff = gps_by_idx - psc_by_idx
 
-    return diff
+    gps_by_idx = gps_by_idx.rename({"LOS(mm)":"GPS(mm)"})
+    psc_by_idx = psc_by_idx.rename({"LOS(mm)":"InSAR(mm)"})
+
+    merge = pd.concat([gps_by_idx, psc_by_idx], axis=1)
+
+    return [diff, merge]
 
 # ------------------------------------------------------------------------------
 
