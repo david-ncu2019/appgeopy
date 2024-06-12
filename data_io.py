@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 
 import pandas as pd
 from openpyxl import load_workbook
@@ -207,3 +208,50 @@ def read_json_to_dict(file_path):
         )
 
     return dictionary
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+def save_configs(src_file, dest_folder, verbose=True):
+    """
+    Save a file to a destination folder, overwriting the existing file if the source file is newer.
+
+    Parameters:
+    src_file (str): The path to the source file to be saved.
+    dest_folder (str): The path to the destination folder where the file should be saved.
+    verbose (bool): Optional; If True, prints information about the operation (default is True).
+
+    Returns:
+    str: A message indicating the action taken (e.g., "File saved", "File overwritten", "No action taken").
+
+    Raises:
+    FileNotFoundError: If the source file does not exist.
+    """
+    if not os.path.exists(src_file):
+        raise FileNotFoundError(f"Source file '{src_file}' not found.")
+
+    # Ensure the destination folder exists
+    os.makedirs(dest_folder, exist_ok=True)
+
+    # Construct the destination file path
+    dest_file = os.path.join(dest_folder, os.path.basename(src_file))
+
+    action_message = ""
+
+    # Check if the destination file exists
+    if os.path.exists(dest_file):
+        # Only copy if the source file is newer
+        if os.path.getmtime(src_file) > os.path.getmtime(dest_file):
+            shutil.copy2(src_file, dest_file)
+            action_message = f"Overwriting existing file '{dest_file}' with newer '{src_file}'."
+        else:
+            action_message = f"Existing file '{dest_file}' is up-to-date. No action taken."
+    else:
+        # If the file does not exist, copy it to the destination folder
+        shutil.copy2(src_file, dest_file)
+        action_message = f"Saving new file '{src_file}' to '{dest_folder}'."
+
+    # Print the action message if verbose is True
+    if verbose:
+        print(action_message)
+
+    return action_message
