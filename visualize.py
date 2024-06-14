@@ -393,6 +393,72 @@ def plot_stem(
 
     return fig, ax
 
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+# New horizontal bar plotting function
+def plot_horizontal_bar(df, x_col, y_col, title="Horizontal Bar Plot", xlabel="Value", ylabel="Category", 
+                        color="skyblue", height=1, figsize=(11.7, 8.27)):
+    """
+    Plot a horizontal bar plot for the given DataFrame.
+
+    Parameters:
+    - df (pd.DataFrame): DataFrame containing the data to plot.
+    - x_col (str): Column name for the x-axis values.
+    - y_col (str): Column name for the y-axis labels.
+    - title (str): Title of the plot.
+    - xlabel (str): Label for the X-axis.
+    - ylabel (str): Label for the Y-axis.
+    - color (str): Color of the bars.
+    - figsize (tuple): Size of the figure.
+    - savepath (str or None): Path to save the figure. If None, the figure is not saved.
+
+    Returns:
+    - fig (matplotlib.figure.Figure): The figure object.
+    - ax (matplotlib.axes.Axes): The axes object.
+    """
+    try:
+        # Ensure the required columns are present in the DataFrame
+        if x_col not in df.columns or y_col not in df.columns:
+            raise KeyError(f"Columns '{x_col}' or '{y_col}' not found in DataFrame")
+
+        fig_width, fig_height = figsize
+        scaling_factor = calculate_scaling_factor(fig_width, fig_height)
+
+        fig, ax = plt.subplots(figsize=(fig_width, fig_height))
+
+        # Create the horizontal bar plot
+        bars = ax.barh(df[y_col], df[x_col], color=color, height=height)
+
+        # Annotate each bar with its value
+        for bar in bars:
+            width = bar.get_width()
+            ax.text(
+                width, bar.get_y() + bar.get_height() / 2,  # Position text at the end of each bar
+                f'{width}',  # The text label
+                va='center',  # Vertical alignment
+                ha='left',  # Horizontal alignment
+                fontsize=11 * scaling_factor  # Scale the fontsize
+            )
+
+        # Configure the plot's appearance using the provided functions
+        configure_axis(ax, xlabel=xlabel, ylabel=ylabel, title=title, scaling_factor=scaling_factor)
+
+        # If x_col is numeric, set the format
+        if pd.api.types.is_numeric_dtype(df[x_col]):
+            ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{int(x):,}'))
+
+        # Tight layout for better spacing
+        fig.tight_layout()
+
+        return fig, ax
+
+    except KeyError as ke:
+        logging.error(f"KeyError: {ke}")
+        print(f"KeyError: {ke}")
+    except Exception as e:
+        logging.error(f"An error occurred: {e}")
+        print(f"An error occurred: {e}")
+
 
 # def plot_custom_subplots(
 #     df,
