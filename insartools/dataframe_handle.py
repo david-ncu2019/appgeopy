@@ -1,7 +1,6 @@
 import shapefile as sf
 import numpy as np
 import pandas as pd
-from .ts_disp import convert_cumdisp_to_disp
 
 # ------------------------------------------------------------------------------
 
@@ -100,5 +99,58 @@ def cumdisp_to_disp_dataframe(cumdisp_dataframe, datetime_list):
 
     # Concatenate the displacement DataFrame with the initial part of the cumulative displacement DataFrame
     return pd.concat([cumdisp_dataframe.iloc[:, :idx_first_date], displacement_df], axis=1)
+
+# ------------------------------------------------------------------------------
+
+def convert_to_fulltime(dataframe):
+    """
+    Extend a DataFrame to include all dates within the range from the first to the last date of the index,
+    filling any missing dates with NaN values.
+
+    Parameters:
+    - dataframe (pd.DataFrame): The original DataFrame with a DateTime index.
+
+    Returns:
+    - pd.DataFrame: A new DataFrame with a complete range of dates from start to end, including the original data 
+      and filling missing dates with NaN.
+    
+    Raises:
+    - ValueError: If the DataFrame does not have a DateTime index.
+    - Exception: For other general exceptions.
+    """
+    try:
+        # Ensure the DataFrame has a DateTime index
+        if not isinstance(dataframe.index, pd.DatetimeIndex):
+            raise ValueError("The DataFrame must have a DateTime index.")
+
+        # Get the existing date range from the DataFrame
+        existing_datetime_index = dataframe.index
+        start_date = existing_datetime_index[0]
+        end_date = existing_datetime_index[-1]
+
+        # Generate the full range of dates from the start to end
+        full_datetime_index = pd.date_range(start=start_date, end=end_date)
+
+        # Identify missing dates
+        missing_dates = [date for date in full_datetime_index if date not in existing_datetime_index]
+
+        # Create a DataFrame for the missing dates, filled with NaN
+        missing_dates_df = pd.DataFrame(data=np.nan, index=missing_dates, columns=dataframe.columns)
+
+        # Concatenate the original DataFrame with the missing dates DataFrame
+        extended_dataframe = pd.concat([dataframe, missing_dates_df])
+
+        # Sort the DataFrame by the index to maintain chronological order
+        extended_dataframe.sort_index(inplace=True)
+
+        return extended_dataframe
+
+    except ValueError as ve:
+        print(f"ValueError: {ve}")
+        raise
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        raise
 
 # ------------------------------------------------------------------------------

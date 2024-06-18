@@ -1,7 +1,10 @@
 import logging
 import os
+from datetime import datetime
 
+import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
+import matplotlib.ticker as plticker
 import numpy as np
 import pandas as pd
 
@@ -60,7 +63,7 @@ def configure_axis(
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
-def configure_legend(ax, scaling_factor=1, fontsize_base=18):
+def configure_legend(ax, scaling_factor=1, fontsize_base=18, frameon=False):
     """
     Configure the legend.
 
@@ -70,7 +73,135 @@ def configure_legend(ax, scaling_factor=1, fontsize_base=18):
     - fontsize_base (int): Base font size.
     """
     legend_fontsize = fontsize_base * scaling_factor * 1
-    ax.legend(fontsize=legend_fontsize, frameon=False)
+
+    ax.legend(
+        fontsize=legend_fontsize,
+        frameon=frameon,
+        labelspacing=0.1,
+        handletextpad=0.2,
+    )
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+
+def configure_ticks(
+    ax,
+    x_major_interval=None,
+    x_minor_interval=None,
+    y_major_interval=None,
+    y_minor_interval=None,
+):
+    """
+    Configure the major and minor tick intervals for the x and y axes.
+
+    Parameters:
+    - ax (matplotlib.axes.Axes): The axis to configure.
+    - x_major_interval (float or None): Interval for major ticks on the x-axis.
+    - x_minor_interval (float or None): Interval for minor ticks on the x-axis.
+    - y_major_interval (float or None): Interval for major ticks on the y-axis.
+    - y_minor_interval (float or None): Interval for minor ticks on the y-axis.
+
+    Example Usage:
+    ```
+    fig, ax = plt.subplots()
+    # Example data plotting
+    ax.plot(range(100), range(100))
+
+    # Configure ticks
+    configure_ticks(ax, x_major_interval=10, x_minor_interval=5, y_major_interval=20, y_minor_interval=10)
+    plt.show()
+    ```
+    """
+    if x_major_interval is not None:
+        x_major_loc = plticker.MultipleLocator(base=x_major_interval)
+        ax.xaxis.set_major_locator(x_major_loc)
+
+    if x_minor_interval is not None:
+        x_minor_loc = plticker.MultipleLocator(base=x_minor_interval)
+        ax.xaxis.set_minor_locator(x_minor_loc)
+
+    if y_major_interval is not None:
+        y_major_loc = plticker.MultipleLocator(base=y_major_interval)
+        ax.yaxis.set_major_locator(y_major_loc)
+
+    if y_minor_interval is not None:
+        y_minor_loc = plticker.MultipleLocator(base=y_minor_interval)
+        ax.yaxis.set_minor_locator(y_minor_loc)
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+
+def configure_datetime_ticks(
+    ax,
+    axis="x",
+    major_interval=None,
+    minor_interval=None,
+    date_format="%Y/%m",
+    start_date=None,
+    end_date=None,
+    grid=True,
+):
+    """
+    Configure datetime tick labels and intervals for the specified axis.
+
+    Parameters:
+    - ax (matplotlib.axes.Axes): The axis to configure.
+    - axis (str): Specify which axis to configure ('x' or 'y').
+    - major_interval (int or None): Interval in months for major ticks. If None, no major ticks are set.
+    - minor_interval (int or None): Interval in months for minor ticks. If None, no minor ticks are set.
+    - date_format (str): Date format for the tick labels. Default is "%Y/%m".
+    - start_date (datetime or None): Start date for the axis limit. If None, no limit is set.
+    - end_date (datetime or None): End date for the axis limit. If None, no limit is set.
+    - grid (bool): Whether to show grid lines for the major ticks. Default is True.
+
+    Example Usage:
+    ```
+    fig, ax = plt.subplots()
+    # Example data plotting
+    dates = pd.date_range(start="2000-01-01", periods=100, freq="M")
+    values = np.random.randn(100).cumsum()
+    ax.plot(dates, values)
+
+    # Configure datetime ticks
+    configure_datetime_ticks(ax, axis="x", major_interval=24, minor_interval=12, date_format="%Y/%m",
+                             start_date=datetime(2000, 1, 1), end_date=datetime(2023, 12, 31))
+    plt.show()
+    ```
+    """
+    if major_interval is not None:
+        major_locator = mdates.MonthLocator(interval=major_interval)
+        if axis == "x":
+            ax.xaxis.set_major_locator(major_locator)
+        elif axis == "y":
+            ax.yaxis.set_major_locator(major_locator)
+        else:
+            raise ValueError("Axis must be 'x' or 'y'.")
+
+    if minor_interval is not None:
+        minor_locator = mdates.MonthLocator(interval=minor_interval)
+        if axis == "x":
+            ax.xaxis.set_minor_locator(minor_locator)
+        elif axis == "y":
+            ax.yaxis.set_minor_locator(minor_locator)
+        else:
+            raise ValueError("Axis must be 'x' or 'y'.")
+
+    date_formatter = mdates.DateFormatter(date_format)
+    if axis == "x":
+        ax.xaxis.set_major_formatter(date_formatter)
+    elif axis == "y":
+        ax.yaxis.set_major_formatter(date_formatter)
+
+    if start_date and end_date:
+        if axis == "x":
+            ax.set_xlim(start_date, end_date)
+        elif axis == "y":
+            ax.set_ylim(start_date, end_date)
+
+    if grid:
+        ax.grid(which="major", axis=axis)
 
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -307,6 +438,7 @@ def save_figure(
 def plot_stem(
     data,
     title="Stem Plot",
+    ax=None,
     xlabel="X-axis",
     ylabel="Y-axis",
     figsize=(11.7, 8.27),
@@ -367,7 +499,9 @@ def plot_stem(
     fig_width, fig_height = figsize
     scaling_factor = calculate_scaling_factor(fig_width, fig_height)
 
-    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(fig_width, fig_height))
+
     ax.stem(
         data.index,
         data.values,
@@ -377,27 +511,38 @@ def plot_stem(
         **kwargs,
     )
 
-    configure_axis(
-        ax,
-        xlabel=xlabel,
-        ylabel=ylabel,
-        title=title,
-        scaling_factor=scaling_factor,
-        fontsize_base=18,
-    )
+    # configure_axis(
+    #     ax,
+    #     xlabel=xlabel,
+    #     ylabel=ylabel,
+    #     title=title,
+    #     scaling_factor=scaling_factor,
+    #     fontsize_base=18,
+    # )
 
     # Customize grid for better visual clarity
     ax.grid(True, which="both", linestyle="--", linewidth=0.5)
-    fig.autofmt_xdate(rotation=90, ha="center")
-    plt.tight_layout()
+    # fig.autofmt_xdate(rotation=90, ha="center")
+    # fig.tight_layout()
 
-    return fig, ax
+    return ax
+
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 # New horizontal bar plotting function
-def plot_horizontal_bar(df, x_col, y_col, title="Horizontal Bar Plot", xlabel="Value", ylabel="Category", 
-                        color="skyblue", height=1, figsize=(11.7, 8.27)):
+def plot_horizontal_bar(
+    df,
+    x_col,
+    y_col,
+    ax=None,
+    title="Horizontal Bar Plot",
+    xlabel="Value",
+    ylabel="Category",
+    color="skyblue",
+    height=1,
+    figsize=(11.7, 8.27),
+):
     """
     Plot a horizontal bar plot for the given DataFrame.
 
@@ -419,12 +564,15 @@ def plot_horizontal_bar(df, x_col, y_col, title="Horizontal Bar Plot", xlabel="V
     try:
         # Ensure the required columns are present in the DataFrame
         if x_col not in df.columns or y_col not in df.columns:
-            raise KeyError(f"Columns '{x_col}' or '{y_col}' not found in DataFrame")
+            raise KeyError(
+                f"Columns '{x_col}' or '{y_col}' not found in DataFrame"
+            )
 
         fig_width, fig_height = figsize
         scaling_factor = calculate_scaling_factor(fig_width, fig_height)
 
-        fig, ax = plt.subplots(figsize=(fig_width, fig_height))
+        if ax is None:
+            fig, ax = plt.subplots(figsize=(fig_width, fig_height))
 
         # Create the horizontal bar plot
         bars = ax.barh(df[y_col], df[x_col], color=color, height=height)
@@ -433,24 +581,34 @@ def plot_horizontal_bar(df, x_col, y_col, title="Horizontal Bar Plot", xlabel="V
         for bar in bars:
             width = bar.get_width()
             ax.text(
-                width, bar.get_y() + bar.get_height() / 2,  # Position text at the end of each bar
-                f'{width}',  # The text label
-                va='center',  # Vertical alignment
-                ha='left',  # Horizontal alignment
-                fontsize=11 * scaling_factor  # Scale the fontsize
+                width,
+                bar.get_y()
+                + bar.get_height() / 2,  # Position text at the end of each bar
+                f"{width}",  # The text label
+                va="center",  # Vertical alignment
+                ha="left",  # Horizontal alignment
+                fontsize=11 * scaling_factor,  # Scale the fontsize
             )
 
         # Configure the plot's appearance using the provided functions
-        configure_axis(ax, xlabel=xlabel, ylabel=ylabel, title=title, scaling_factor=scaling_factor)
+        configure_axis(
+            ax,
+            xlabel=xlabel,
+            ylabel=ylabel,
+            title=title,
+            scaling_factor=scaling_factor,
+        )
 
         # If x_col is numeric, set the format
         if pd.api.types.is_numeric_dtype(df[x_col]):
-            ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{int(x):,}'))
+            ax.xaxis.set_major_formatter(
+                plt.FuncFormatter(lambda x, _: f"{int(x):,}")
+            )
 
         # Tight layout for better spacing
-        fig.tight_layout()
+        # fig.tight_layout()
 
-        return fig, ax
+        return ax
 
     except KeyError as ke:
         logging.error(f"KeyError: {ke}")
