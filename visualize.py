@@ -606,9 +606,9 @@ def plot_horizontal_bar(
             )
 
         # Tight layout for better spacing
-        # fig.tight_layout()
+        fig.tight_layout()
 
-        return ax
+        return fig, ax
 
     except KeyError as ke:
         logging.error(f"KeyError: {ke}")
