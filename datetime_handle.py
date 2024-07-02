@@ -96,3 +96,26 @@ def extract_datetime_from_mfile(mfile):
     return sorted(datetimes)
 
 # ------------------------------------------------------------------------------
+
+def numeric_time_index(time_series):
+    """
+    Generate a numeric time index for a given time series, excluding null values.
+
+    Parameters:
+        time_series (pandas.Series): A pandas Series with a DatetimeIndex, which may contain null values.
+
+    Returns:
+        numpy.ndarray: An array of numeric indices corresponding to the non-null values in the input time series.
+    """
+    # Create a boolean filter for non-null values in the time series
+    non_null_filter = time_series.notna()
+
+    # Generate a numeric array representing the time indices
+    numeric_time_array = np.arange(len(time_series))
+
+    # Apply the non-null filter to the numeric time array
+    numeric_time_array_finite = numeric_time_array[non_null_filter]
+
+    return numeric_time_array_finite
+
+# ------------------------------------------------------------------------------

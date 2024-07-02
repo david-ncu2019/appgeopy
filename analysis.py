@@ -5,6 +5,8 @@ import pandas as pd
 import scipy
 from numpy.fft import fft, fftfreq, ifft  # Fast Fourier Transform functions
 from sklearn.linear_model import RANSACRegressor
+from sklearn.preprocessing import PolynomialFeatures
+from sklearn.pipeline import make_pipeline
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -118,6 +120,49 @@ def get_linear_trend(series):
 
     return (series_trend, linear_model.estimator_.coef_[0])
 
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+def get_polynomial_trend(x, y, order, x_estimate=None):
+    """
+    Returns the polynomial trend of the given x and y arrays using RANSACRegressor.
+
+    Parameters:
+        x (array-like): The x-value array.
+        y (array-like): The y-value array with potential missing values.
+        order (int): The order of polynomial fitting.
+        x_estimate (array-like, optional): The x-value array for estimating the y-value array. 
+                                           If None, the input x-value array is used.
+
+    Returns:
+        pandas.Series: A pandas series representing the polynomial trend of the input series.
+        array-like: The coefficients of the polynomial trend.
+    """
+    # Use input x-value array if x_estimate is not provided
+    if x_estimate is None:
+        x_estimate = x
+
+    # Create mask for finite values
+    is_finite = np.isfinite(y)
+
+    # Prepare data for model fitting
+    X = x[is_finite].reshape(-1, 1)
+    y_finite = y[is_finite]
+
+    # Create and fit the polynomial model using RANSAC
+    polynomial_model = make_pipeline(PolynomialFeatures(order), RANSACRegressor(random_state=42))
+    polynomial_model.fit(X, y_finite)
+
+    # Predict values using the fitted model
+    X_estimate = x_estimate.reshape(-1, 1)
+    y_estimate = polynomial_model.predict(X_estimate)
+
+    # Create a pandas series from the predicted values
+    trend_series = pd.Series(y_estimate, index=x_estimate.flatten())
+
+    # Get the coefficients of the polynomial trend
+    coefficients = polynomial_model.named_steps['ransacregressor'].estimator_.coef_
+
+    return trend_series, coefficients
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
