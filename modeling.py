@@ -56,6 +56,68 @@ def synthetic_daily_signal(
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
+def prepare_sinusoidal_model_inputs(time_series_data, seasonality_info, select_col=None):
+    """
+    Prepare input parameters for the `fit_sinusoidal_model` function.
+
+    This function filters out NaN values, generates numeric time arrays, 
+    and extracts necessary parameters for sinusoidal modeling.
+
+    Parameters:
+    time_series_data : pandas.Series or pandas.DataFrame
+        The time series data. If DataFrame, `select_col` must be specified. The index must be of datetime type.
+    seasonality_info : pandas.DataFrame
+        DataFrame containing the seasonality information with 'Amplitude', 'Periods', and 'Phase'.
+    select_col : str, optional
+        The column name in the DataFrame for which the sinusoidal model is to be fitted. Required if `time_series_data` is a DataFrame.
+
+    Returns:
+    tuple
+        A tuple containing time values, observed values, amplitudes, periods, phase shifts, and baseline.
+    """
+    # Ensure the DataFrame index is datetime
+    if not isinstance(time_series_data.index, pd.DatetimeIndex):
+        raise ValueError("The index of the time series data must be of datetime type.")
+    
+    # Check if the input is a DataFrame or Series
+    if isinstance(time_series_data, pd.DataFrame):
+        if select_col is None:
+            raise ValueError("select_col must be specified when time_series_data is a DataFrame.")
+        if select_col not in time_series_data.columns:
+            raise ValueError(f"Column '{select_col}' not found in DataFrame.")
+        series_data = time_series_data[select_col]
+    elif isinstance(time_series_data, pd.Series):
+        series_data = time_series_data
+    else:
+        raise TypeError("time_series_data must be either a pandas Series or DataFrame.")
+    
+    # Ensure the seasonality_info DataFrame contains required columns
+    required_columns = ["Amplitude", "Frequency", "Phase", "Period (days)"]
+    if not all(col in seasonality_info.columns for col in required_columns):
+        raise ValueError(f"seasonality_info must contain the following columns: {', '.join(required_columns)}")
+    
+    # Filter out NaN values
+    notna_filter = series_data.notna()
+    
+    # Generate numeric time array for finite values
+    numeric_time_arr = np.arange(len(series_data))
+    numeric_time_arr_finite = numeric_time_arr[notna_filter]
+
+    # Extract observed values for finite entries
+    observed_values = series_data[notna_filter].values
+    
+    # Extract seasonality parameters
+    amplitudes = seasonality_info["Amplitude"].values
+    periods = seasonality_info["Period (days)"].values
+    phase_shifts = seasonality_info["Phase"].values
+
+    # Calculate the baseline as the mean of observed values
+    baseline = np.nanmean(observed_values)
+
+    return numeric_time_arr_finite, observed_values, amplitudes, periods, phase_shifts, baseline
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
 def sinusoidal_model(time_values, amplitude_terms, baseline):
     """
     Construct a sinusoidal model based on time, amplitude terms, and a baseline value.
