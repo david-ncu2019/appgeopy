@@ -5,8 +5,8 @@ import pandas as pd
 import scipy
 from numpy.fft import fft, fftfreq, ifft  # Fast Fourier Transform functions
 from sklearn.linear_model import RANSACRegressor
-from sklearn.preprocessing import PolynomialFeatures
 from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import PolynomialFeatures
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -82,7 +82,7 @@ def find_peak_to_peak(
 
     result_df = pd.DataFrame(data_cache).set_index("date")
     result_df = result_df.sort_values(by="value", ascending=False)
-    
+
     return result_df
 
 
@@ -120,7 +120,9 @@ def get_linear_trend(series):
 
     return (series_trend, linear_model.estimator_.coef_[0])
 
+
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
 
 def get_polynomial_trend(x, y, order, x_estimate=None):
     """
@@ -130,7 +132,7 @@ def get_polynomial_trend(x, y, order, x_estimate=None):
         x (array-like): The x-value array.
         y (array-like): The y-value array with potential missing values.
         order (int): The order of polynomial fitting.
-        x_estimate (array-like, optional): The x-value array for estimating the y-value array. 
+        x_estimate (array-like, optional): The x-value array for estimating the y-value array.
                                            If None, the input x-value array is used.
 
     Returns:
@@ -149,7 +151,9 @@ def get_polynomial_trend(x, y, order, x_estimate=None):
     y_finite = y[is_finite]
 
     # Create and fit the polynomial model using RANSAC
-    polynomial_model = make_pipeline(PolynomialFeatures(order), RANSACRegressor(random_state=42))
+    polynomial_model = make_pipeline(
+        PolynomialFeatures(order), RANSACRegressor(random_state=42)
+    )
     polynomial_model.fit(X, y_finite)
 
     # Predict values using the fitted model
@@ -160,9 +164,12 @@ def get_polynomial_trend(x, y, order, x_estimate=None):
     trend_series = pd.Series(y_estimate, index=x_estimate.flatten())
 
     # Get the coefficients of the polynomial trend
-    coefficients = polynomial_model.named_steps['ransacregressor'].estimator_.coef_
+    coefficients = polynomial_model.named_steps[
+        "ransacregressor"
+    ].estimator_.coef_
 
     return trend_series, coefficients
+
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -189,13 +196,15 @@ def find_seasonality(time_series_data, target_column=None, interval=1):
 
     # Ensure the index is of datetime type
     if not pd.api.types.is_datetime64_any_dtype(time_series_data.index):
-        raise ValueError("The index of the input data must be of datetime type.")
+        raise ValueError(
+            "The index of the input data must be of datetime type."
+        )
 
     # If input is a Series, convert it to a DataFrame
     if isinstance(time_series_data, pd.Series):
-        time_series_data = time_series_data.to_frame(name='value')
-        target_column = 'value'
-    
+        time_series_data = time_series_data.to_frame(name="value")
+        target_column = "value"
+
     # Check if the target column exists in the DataFrame
     if target_column not in time_series_data.columns:
         raise ValueError(f"Column '{target_column}' not found in DataFrame.")
@@ -232,7 +241,10 @@ def find_seasonality(time_series_data, target_column=None, interval=1):
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-def correct_phase_shift(original_data, reconstructed_series, target_column=None):
+
+def correct_phase_shift(
+    original_data, reconstructed_series, target_column=None
+):
     """
     Correct the phase shift between the original and reconstructed time series.
 
@@ -251,14 +263,20 @@ def correct_phase_shift(original_data, reconstructed_series, target_column=None)
     # Ensure the input is a Series or DataFrame
     if isinstance(original_data, pd.DataFrame):
         if target_column is None:
-            raise ValueError("target_column must be specified when original_data is a DataFrame.")
+            raise ValueError(
+                "target_column must be specified when original_data is a DataFrame."
+            )
         if target_column not in original_data.columns:
-            raise ValueError(f"Column '{target_column}' not found in DataFrame.")
+            raise ValueError(
+                f"Column '{target_column}' not found in DataFrame."
+            )
         original_series = original_data[target_column]
     elif isinstance(original_data, pd.Series):
         original_series = original_data
     else:
-        raise TypeError("original_data must be either a pandas Series or DataFrame.")
+        raise TypeError(
+            "original_data must be either a pandas Series or DataFrame."
+        )
 
     # Ensure that both signals are of the same length
     original_length = len(original_series)
@@ -272,17 +290,31 @@ def correct_phase_shift(original_data, reconstructed_series, target_column=None)
     # Handle missing values by using only finite values
     finite_mask = np.isfinite(truncated_original_signal)
     truncated_original_signal_finite = truncated_original_signal[finite_mask]
-    truncated_reconstructed_signal_finite = truncated_reconstructed_signal[finite_mask]
+    truncated_reconstructed_signal_finite = truncated_reconstructed_signal[
+        finite_mask
+    ]
 
     if len(truncated_original_signal_finite) == 0:
-        raise ValueError("No finite values found in the original signal for phase correction.")
+        raise ValueError(
+            "No finite values found in the original signal for phase correction."
+        )
 
     # Remove the mean from each signal
-    mean_adjusted_original_signal = truncated_original_signal_finite - np.nanmean(truncated_original_signal_finite)
-    mean_adjusted_reconstructed_signal = truncated_reconstructed_signal_finite - np.nanmean(truncated_reconstructed_signal_finite)
+    mean_adjusted_original_signal = (
+        truncated_original_signal_finite
+        - np.nanmean(truncated_original_signal_finite)
+    )
+    mean_adjusted_reconstructed_signal = (
+        truncated_reconstructed_signal_finite
+        - np.nanmean(truncated_reconstructed_signal_finite)
+    )
 
     # Compute cross-correlation
-    correlation = np.correlate(mean_adjusted_original_signal, mean_adjusted_reconstructed_signal, mode="full")
+    correlation = np.correlate(
+        mean_adjusted_original_signal,
+        mean_adjusted_reconstructed_signal,
+        mode="full",
+    )
 
     # Find the index of maximum correlation
     max_corr_index = np.argmax(correlation)
@@ -297,5 +329,60 @@ def correct_phase_shift(original_data, reconstructed_series, target_column=None)
     phase_corrected_series = np.roll(truncated_reconstructed_signal, shift)
 
     return phase_corrected_series
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+
+def evaluate_model_fit(original_series, modeled_series):
+    """
+    Evaluate the fit between the modeled signal data and the original series.
+
+    This function calculates common metrics such as Mean Squared Error (MSE),
+    Root Mean Squared Error (RMSE), Mean Absolute Error (MAE), and the Coefficient
+    of Determination (R² score) to quantify the fit quality.
+
+    Parameters:
+    original_series : pandas.Series
+        The original time series data.
+    modeled_series : pandas.Series or numpy.ndarray
+        The modeled signal data.
+
+    Returns:
+    dict
+        A dictionary containing the calculated metrics.
+    """
+    if isinstance(modeled_series, np.ndarray):
+        modeled_series = pd.Series(modeled_series, index=original_series.index)
+
+    # Ensure the lengths match
+    if len(original_series) != len(modeled_series):
+        raise ValueError(
+            "The lengths of the original and modeled series must match."
+        )
+
+    # Drop NaN values from both series
+    combined_df = pd.concat([original_series, modeled_series], axis=1).dropna()
+    original_clean = combined_df.iloc[:, 0]
+    modeled_clean = combined_df.iloc[:, 1]
+
+    # Calculate evaluation metrics
+    mse = np.mean((original_clean - modeled_clean) ** 2)
+    rmse = np.sqrt(mse)
+    mae = np.mean(np.abs(original_clean - modeled_clean))
+    r2 = 1 - (
+        np.sum((original_clean - modeled_clean) ** 2)
+        / np.sum((original_clean - np.mean(original_clean)) ** 2)
+    )
+
+    metrics = {
+        "Mean Squared Error (MSE)": mse,
+        "Root Mean Squared Error (RMSE)": rmse,
+        "Mean Absolute Error (MAE)": mae,
+        "R² Score": r2,
+    }
+
+    return metrics
+
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
