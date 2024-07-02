@@ -212,6 +212,7 @@ def fit_sinusoidal_model(
             xtol=tol,
             gtol=tol,
             method="trf",
+            max_nfev=1000
             # tr_solver="lsmr",
         )
     except Exception as e:
