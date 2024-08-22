@@ -30,10 +30,15 @@ def fulltime_table(df, fulltime_series):
 # ------------------------------------------------------------------------------
 
 def convert_to_datetime(colname):
-	if "N" in colname:
+	if "N" in colname or "D" in colname:
 		colname = colname[1:]
 
 	return pd.to_datetime(colname)
+
+# ------------------------------------------------------------------------------
+
+def convert_to_stringdatetime(colname):
+    pass
 
 # ------------------------------------------------------------------------------
 

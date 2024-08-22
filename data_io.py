@@ -211,7 +211,7 @@ def read_json_to_dict(file_path):
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-def save_configs(src_file, dest_folder, verbose=True):
+def save_configs(src_file, dest_folder, step=None, verbose=True):
     """
     Save a file to a destination folder, overwriting the existing file if the source file is newer.
 
@@ -234,6 +234,13 @@ def save_configs(src_file, dest_folder, verbose=True):
 
     # Construct the destination file path
     dest_file = os.path.join(dest_folder, os.path.basename(src_file))
+
+    if step=='evaluation':
+        dest_file = os.path.join(dest_folder, "evaluation_config.ini")
+    elif step=='calibration':
+        dest_file = os.path.join(dest_folder, "calibration_config.ini")
+    elif step=='validation':
+        dest_file = os.path.join(dest_folder, "validation_config.ini")
 
     action_message = ""
 
