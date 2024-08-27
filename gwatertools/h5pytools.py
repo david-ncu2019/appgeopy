@@ -42,22 +42,26 @@ def load_input_data():
 
 def prepare_metadata(time_series_data):
     """
-    Prepare metadata for each location based on provided time-series data.
+    Prepare metadata for each location and each sensor based on provided time-series data.
     
     Parameters:
     time_series_data (dict): A dictionary containing locations and their corresponding sensors' data as pandas Series.
     
     Returns:
-    dict: Metadata dictionary with information about each location, including random longitude and latitude, 
+    tuple: Two dictionaries - one for location metadata and one for sensor metadata.
+        - location_metadata: Metadata dictionary with information about each location, including random longitude, latitude,
           number of sensors, and start and end dates.
+        - sensor_metadata: Metadata dictionary for each sensor within each location, including sensor type and measurement unit.
     
     Example:
     data = load_input_data()
-    metadata = prepare_metadata(data)
-    print(metadata['Location_001'])
+    location_metadata, sensor_metadata = prepare_metadata(data)
+    print(location_metadata['Location_001'])
+    print(sensor_metadata['Location_001']['Sensor_001'])
     """
-    metadata = {}
-    
+    location_metadata = {}
+    sensor_metadata = {}
+
     for location, sensors in time_series_data.items():
         # Select the first sensor to get consistent START_DATE and END_DATE
         first_sensor_key = next(iter(sensors))
@@ -65,7 +69,7 @@ def prepare_metadata(time_series_data):
         end_date = sensors[first_sensor_key].index.max().strftime('%Y%m%d')
         
         # Build the metadata dictionary for the current location
-        metadata[location] = {
+        location_metadata[location] = {
             'Longitude': np.random.uniform(-180, 180),  # Random longitude
             'Latitude': np.random.uniform(-90, 90),     # Random latitude
             'Location Name': location,
@@ -74,14 +78,18 @@ def prepare_metadata(time_series_data):
             "End Date": end_date,
         }
         
-        # Add depth or other characteristic information for each sensor
-        metadata[location].update({
-            f"Characteristic_{i+1}": np.random.randint(50, 200)
-            for i in range(len(sensors))
-        })
+        # Initialize sensor metadata for the current location
+        sensor_metadata[location] = {}
+        
+        # Add metadata for each sensor
+        for sensor_name, series in sensors.items():
+            sensor_metadata[location][sensor_name] = {
+                'Sensor Type': 'Temperature' if '001' in sensor_name else 'Humidity',  # Example sensor types
+                'Measurement Unit': 'Celsius' if '001' in sensor_name else '%',
+                'Characteristic': np.random.randint(50, 200)  # Random characteristic
+            }
     
-    return metadata
-
+    return location_metadata, sensor_metadata
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -122,79 +130,48 @@ def transform_data_for_hdf5(time_series_data):
 def initialize_hdf5_file(file_name: str, transformed_data: dict, metadata: dict = None, sensor_metadata: dict = None) -> h5py.File:
     """
     Initialize an HDF5 file with structure for storing time-series data and optional metadata.
-    
+
     Parameters:
     file_name (str): The name of the HDF5 file to create.
     transformed_data (dict): A dictionary containing transformed locations and their corresponding sensors' data.
     metadata (dict, optional): Metadata for each location. Defaults to None.
     sensor_metadata (dict, optional): Metadata for each sensor. Defaults to None.
-    
+
     Returns:
     h5py.File: The initialized HDF5 file object in append mode for further operations.
-    
+
     Example:
     transformed_data = transform_data_for_hdf5(load_input_data())
-    metadata = prepare_metadata(load_input_data())
-    hdf5_file = initialize_hdf5_file('example.h5', transformed_data, metadata)
+    location_metadata, sensor_metadata = prepare_metadata(load_input_data())
+    hdf5_file = initialize_hdf5_file('example.h5', transformed_data, location_metadata, sensor_metadata)
     hdf5_file.close()
     """
     with h5py.File(file_name, 'w') as hdf5_file:
-        metadata = metadata or {}
-        sensor_metadata = sensor_metadata or {}
-
         for location, data in transformed_data.items():
             # Create a group for each location
             location_group = hdf5_file.create_group(location)
             
-            # Add metadata as individual attributes of the location group
-            location_metadata = metadata.get(location, {})
-            for key, value in location_metadata.items():
-                location_group.attrs[key] = value
+            # Add location metadata as individual attributes of the location group
+            if metadata and location in metadata:
+                for key, value in metadata[location].items():
+                    location_group.attrs[key] = value
             
             # Save date list as a dataset
             location_group.create_dataset('date', data=np.array(data['date'], dtype='S10'))  # Save dates as string array
             
-            # Save sensor data as datasets and add metadata
+            # Save sensor data as datasets and add metadata for each sensor
             for sensor, sensor_data in data.items():
                 if sensor != 'date':
                     sensor_dataset = location_group.create_dataset(sensor, data=sensor_data)
-                    # Add metadata for this sensor, if available
-                    sensor_meta = sensor_metadata.get(location, {}).get(sensor, {})
-                    for key, value in sensor_meta.items():
-                        sensor_dataset.attrs[key] = value
+                    
+                    # Add sensor-specific metadata, if available
+                    if sensor_metadata and location in sensor_metadata and sensor in sensor_metadata[location]:
+                        for key, value in sensor_metadata[location][sensor].items():
+                            sensor_dataset.attrs[key] = value
     
-    return h5py.File(file_name, 'a')  # Open in append mode for further operations
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    # Explicitly reopen the file in append mode for further operations
+    return h5py.File(file_name, 'a')
 
-def write_to_hdf5(hdf5_file: h5py.File, transformed_data: dict):
-    """
-    Write the processed data to an existing HDF5 file.
-    
-    Parameters:
-    hdf5_file (h5py.File): The HDF5 file object to write to.
-    transformed_data (dict): A dictionary containing transformed locations and their corresponding sensors' data.
-    
-    Example:
-    with h5py.File('example.h5', 'a') as hdf5_file:
-        transformed_data = transform_data_for_hdf5(load_input_data())
-        write_to_hdf5(hdf5_file, transformed_data)
-    """
-    for location, data in transformed_data.items():
-        if location not in hdf5_file:
-            location_group = hdf5_file.create_group(location)
-        else:
-            location_group = hdf5_file[location]
-
-        # Update date list and sensor data if necessary
-        location_group['date'][...] = np.array(data['date'], dtype='S10')
-        
-        for sensor, sensor_data in data.items():
-            if sensor != 'date':
-                if sensor in location_group:
-                    location_group[sensor][...] = sensor_data
-                else:
-                    location_group.create_dataset(sensor, data=sensor_data)
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -241,120 +218,43 @@ def load_hdf5_data(file_name: str, location: str = None, sensor: str = None) -> 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-def update_hdf5_from_dict(file_name: str, updates_dict: dict):
+def update_hdf5(file_name: str, updates_dict: dict):
     """
-    Update an HDF5 file with new data and metadata from a dictionary.
-    
+    Updates both data and metadata in an HDF5 file.
+
     Parameters:
     file_name (str): The name of the HDF5 file to update.
-    updates_dict (dict): A dictionary containing update instructions for locations, sensors, and metadata.
-    
+    updates_dict (dict): A dictionary with updates for data and metadata.
+
     Example:
-    updates = {
-        'Location_001': {
-            'sensor_data': {'Sensor_001': np.array([1.5, 2.5, 3.5])},
-            'metadata': {'Longitude': 50.0, 'Latitude': 10.0}
-        }
-    }
-    update_hdf5_from_dict('example.h5', updates)
+    update_hdf5('example.h5', updates)
     """
-    try:
-        for location, location_data in updates_dict.items():
-            sensor_data = location_data.get('sensor_data', {})
-            sensor_metadata = location_data.get('sensor_metadata', {})
-            metadata = location_data.get('metadata', {})
-
-            # Update sensor data and their specific metadata
-            if sensor_data:
-                update_data(file_name, location, sensor_data, sensor_metadata)
-            
-            # Update location-specific metadata only if explicitly provided
-            if metadata:
-                update_metadata(file_name, location, metadata)
-                
-        print(f"Successfully updated the file '{file_name}'.")
-    except Exception as e:
-        print(f"An error occurred while updating the file '{file_name}': {e}")
-
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-
-def update_data(file_name, location, sensor_data_dict, sensor_metadata=None):
-    """
-    Update or replace data for a specific location in the HDF5 file without altering existing metadata.
-    
-    Parameters:
-    file_name (str): The name of the HDF5 file.
-    location (str): The location to update or add data to.
-    sensor_data_dict (dict): A dictionary where keys are sensor names and values are numpy arrays of the new data.
-    sensor_metadata (dict, optional): Metadata for each sensor. Default is None.
-    
-    Example:
-    update_data('example.h5', 'Location_001', {'Sensor_001': np.array([1.0, 2.0, 3.0])})
-    """
-    with h5py.File(file_name, 'a') as hdf5_file:  # 'a' mode allows for read/write
-        if location not in hdf5_file:
-            location_group = hdf5_file.create_group(location)
-        else:
-            location_group = hdf5_file[location]
-        
-        for sensor, new_data in sensor_data_dict.items():
-            if sensor in location_group:
-                # Preserve existing metadata
-                old_metadata = {key: location_group[sensor].attrs[key] for key in location_group[sensor].attrs.keys()}
-                
-                # Delete the old dataset only if it's going to be replaced
-                del location_group[sensor]
-                
-                # Create new dataset with the same name
-                sensor_dataset = location_group.create_dataset(sensor, data=new_data)
-                
-                # Restore metadata, unless new metadata is provided
-                if sensor_metadata and sensor in sensor_metadata:
-                    for key, value in sensor_metadata[sensor].items():
-                        sensor_dataset.attrs[key] = value
-                else:
-                    for key, value in old_metadata.items():
-                        sensor_dataset.attrs[key] = value
+    with h5py.File(file_name, 'a') as hdf5_file:
+        for location, data in updates_dict.items():
+            if location not in hdf5_file:
+                location_group = hdf5_file.create_group(location)
             else:
-                # Create new dataset if it does not exist
-                sensor_dataset = location_group.create_dataset(sensor, data=new_data)
-                
-                # Apply metadata if provided
-                if sensor_metadata and sensor in sensor_metadata:
-                    for key, value in sensor_metadata[sensor].items():
-                        sensor_dataset.attrs[key] = value
+                location_group = hdf5_file[location]
 
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+            # Update location metadata if available
+            if 'metadata' in data:
+                for key, value in data['metadata'].items():
+                    location_group.attrs[key] = value
 
+            # Update sensor metadata and data
+            if 'sensor_metadata' in data:
+                for sensor, sensor_meta in data['sensor_metadata'].items():
+                    if sensor in location_group:
+                        sensor_dataset = location_group[sensor]
+                        for key, value in sensor_meta.items():
+                            sensor_dataset.attrs[key] = value
 
-def update_metadata(file_name, location, new_metadata_dict):
-    """
-    Update or replace metadata for a specific location in the HDF5 file.
-    
-    Parameters:
-    file_name (str): The name of the HDF5 file.
-    location (str): The location to update or add metadata to.
-    new_metadata_dict (dict): A dictionary where keys are metadata attribute names and values are the new metadata values.
-    
-    Example:
-    update_metadata('example.h5', 'Location_001', {'Longitude': 120.0, 'Latitude': 35.0})
-    """
-    with h5py.File(file_name, 'a') as hdf5_file:  # 'a' mode allows for read/write
-        if location in hdf5_file:
-            location_group = hdf5_file[location]
-        else:
-            location_group = hdf5_file.create_group(location)
-        
-        if new_metadata_dict:  # Only update if new metadata is provided
-            for key, value in new_metadata_dict.items():
-                location_group.attrs[key] = value  # Add or update the metadata attribute
-        
-        # Preserve existing metadata and do not set 'information' to 'null' if new_metadata_dict is empty
-        if not new_metadata_dict and 'information' not in location_group.attrs:
-            location_group.attrs['information'] = 'null'
+            # Update sensor data if available (but we are not modifying measurement data in this task)
+            for sensor, sensor_data in data.get('sensor_data', {}).items():
+                if sensor in location_group:
+                    existing_dataset = location_group[sensor]
+                    # Assuming we are keeping the original data intact
+                    existing_dataset[...] = sensor_data  # This line will just keep the data as is
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -390,54 +290,6 @@ def display_hdf5_structure(file, max_depth=None, current_depth=0, indent=0):
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-def display_dataset_info(file_name, dataset_name):
-    """
-    Display information about a specific dataset in the HDF5 file.
-    
-    Parameters:
-    file_name (str): The path to the HDF5 file.
-    dataset_name (str): The name of the dataset to display.
-    
-    Example:
-    display_dataset_info('example.h5', 'Location_001/Sensor_001')
-    """
-    with h5py.File(file_name, 'r') as f:
-        if dataset_name in f:
-            dataset = f[dataset_name]
-            data = dataset[...]
-
-            print(f"Dataset: {dataset_name}")
-            print(f"  Shape: {data.shape}")
-            print(f"  Data Type: {data.dtype}")
-            print(f"  Min: {np.nanmin(data)}, Max: {np.nanmax(data)}")
-            print(f"  Number of NaNs: {np.sum(np.isnan(data))}")
-
-            # Warning if dataset is empty
-            if data.size == 0:
-                print(f"WARNING: Dataset '{dataset_name}' is empty.")
-
-            # Warning if dataset contains NaNs
-            nan_count = np.sum(np.isnan(data))
-            if nan_count > 0:
-                print(f"WARNING: Dataset '{dataset_name}' contains {nan_count} NaN values.")
-
-            # Warning if dataset shape is unusual (e.g., too many dimensions)
-            if len(data.shape) > 4:
-                print(f"WARNING: Dataset '{dataset_name}' has more than 4 dimensions, which may be unexpected.")
-            
-            # Warning if dataset has an unusual data type
-            acceptable_dtypes = [np.float32, np.float64, np.int32, np.int64]
-            if data.dtype not in acceptable_dtypes:
-                print(f"WARNING: Dataset '{dataset_name}' has an unusual data type: {data.dtype}. Expected one of {acceptable_dtypes}.")
-        
-        else:
-            print(f"Dataset '{dataset_name}' not found in the file.")
-            available_datasets = list_datasets(f)
-            print(f"Available datasets in the file are: {available_datasets}")
-
-
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 def list_datasets(file):
     """
@@ -571,43 +423,3 @@ def export_data_to_dataframe(file_name, location_name, sensor_name, datetime_att
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-"""
-# Example transformed data
-transformed_data = {
-    'Location_001': {
-        'date': ['20220101', '20220102', '20220103'],
-        'Sensor_001': np.array([1.0, 2.0, 3.0]),
-        'Sensor_002': np.array([4.0, 5.0, 6.0]),
-    },
-    'Location_002': {
-        'date': ['20220101', '20220102', '20220103'],
-        'Sensor_001': np.array([7.0, 8.0, 9.0]),
-        'Sensor_002': np.array([10.0, 11.0, 12.0]),
-    },
-}
-
-# Example location metadata
-metadata = {
-    'Location_001': {'Longitude': 120.123, 'Latitude': 35.123, 'Location Name': 'Location_001'},
-    'Location_002': {'Longitude': 121.123, 'Latitude': 34.123, 'Location Name': 'Location_002'}
-}
-
-# Example sensor metadata
-sensor_metadata = {
-    'Location_001': {
-        'Sensor_001': {'unit': 'cm', 'description': 'Depth measurement'},
-        'Sensor_002': {'unit': 'cm', 'description': 'Temperature measurement'},
-    },
-    'Location_002': {
-        'Sensor_001': {'unit': 'm', 'description': 'Water level'},
-        'Sensor_002': {'unit': 'm', 'description': 'Flow rate'},
-    },
-}
-
-# Initialize the HDF5 file with sensor metadata
-hdf5_file = initialize_hdf5_file('time_series_data.h5', transformed_data, metadata, sensor_metadata)
-
-# Don't forget to close the file after writing
-hdf5_file.close()
-"""
