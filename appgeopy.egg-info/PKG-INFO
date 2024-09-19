@@ -1,0 +1,21 @@
+Metadata-Version: 2.1
+Name: appgeopy
+Version: 0.1
+Summary: A package for processing and analyzing time-series data.
+Home-page: https://github.com/yourusername/signal_toolbox
+Author: David Nguyen
+Author-email: vinhtruongkhtn@gmail.com
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.8
+Requires-Dist: numpy
+Requires-Dist: pandas
+Requires-Dist: geopandas
+Requires-Dist: matplotlib
+Requires-Dist: scipy
+Requires-Dist: seaborn
+Requires-Dist: scikit-learn
+Requires-Dist: prophet==1.1.1
+Requires-Dist: holidays==0.24

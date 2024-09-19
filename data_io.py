@@ -56,7 +56,6 @@ def get_sheetnames(fpath):
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-
 def save_df_to_excel(
     df_to_save,
     filepath,
@@ -86,59 +85,124 @@ def save_df_to_excel(
         # Check if the file exists
         file_exists = os.path.isfile(filepath)
 
-        # If file doesn't exist, create a new one
-        if not file_exists:
-            with pd.ExcelWriter(filepath, engine="openpyxl") as writer:
+        # If the file does not exist or mode is 'w', create a new file
+        if not file_exists or mode == "w":
+            with pd.ExcelWriter(filepath, engine="openpyxl", mode="w") as writer:
                 df_to_save.to_excel(writer, sheet_name=sheet_name, index=index)
             if verbose:
-                print(
-                    f"Excel file created and DataFrame written to '{sheet_name}' at {filepath}."
-                )
+                print(f"Excel file created and DataFrame written to '{sheet_name}' at {filepath}.")
             return
 
-        # If file exists, load it and append the new sheet
+        # If file exists and mode is 'a' (append), handle appending sheets
         if file_exists and mode == "a":
+            # Load the existing workbook
             book = load_workbook(filepath)
-            with pd.ExcelWriter(
-                filepath, engine="openpyxl", mode="a"
-            ) as writer:
-                writer.book = book
 
-                # Check if sheet already exists
-                if sheet_name in writer.book.sheetnames:
-                    if if_sheet_exists == "replace":
-                        idx = writer.book.sheetnames.index(sheet_name)
-                        std = writer.book.get_sheet_by_name(sheet_name)
-                        writer.book.remove(std)
-                        writer.book.create_sheet(sheet_name, idx)
-                    elif if_sheet_exists == "skip":
-                        if verbose:
-                            print(
-                                f"Sheet '{sheet_name}' already exists and was skipped."
-                            )
-                        return
-                    elif if_sheet_exists == "new":
-                        sheet_name = sheet_name + "_new"
+            # Check if the sheet already exists
+            if sheet_name in book.sheetnames:
+                if if_sheet_exists == "replace":
+                    # Remove the sheet if it exists and replace
+                    del book[sheet_name]
+                elif if_sheet_exists == "skip":
+                    if verbose:
+                        print(f"Sheet '{sheet_name}' already exists and was skipped.")
+                    return
+                elif if_sheet_exists == "new":
+                    # Modify the sheet name to create a new one
+                    sheet_name = f"{sheet_name}_new"
 
+            # Now append the new sheet to the workbook
+            with pd.ExcelWriter(filepath, engine="openpyxl", mode="a") as writer:
                 df_to_save.to_excel(writer, sheet_name=sheet_name, index=index)
-                if verbose:
-                    print(
-                        f"DataFrame successfully written to '{sheet_name}' in the Excel file at {filepath}."
-                    )
 
-        # If file exists and mode is 'w', create a new file
-        if file_exists and mode == "w":
-            with pd.ExcelWriter(
-                filepath, engine="openpyxl", mode="w"
-            ) as writer:
-                df_to_save.to_excel(writer, sheet_name=sheet_name, index=index)
             if verbose:
-                print(
-                    f"Excel file created and DataFrame written to '{sheet_name}' at {filepath}."
-                )
+                print(f"DataFrame successfully written to '{sheet_name}' in the Excel file at {filepath}.")
 
     except Exception as e:
         print(f"An error occurred while writing to the Excel file: {e}")
+
+# def save_df_to_excel(
+#     df_to_save,
+#     filepath,
+#     sheet_name,
+#     mode="a",
+#     if_sheet_exists="replace",
+#     index=False,
+#     verbose=True,
+# ):
+#     """
+#     Save a pandas DataFrame to a specified sheet in an Excel file.
+#     This function can create a new file, append a new sheet, or replace an existing sheet.
+
+#     Args:
+#     df_to_save (pd.DataFrame): The pandas DataFrame to be saved.
+#     filepath (str): The file path where the Excel file is located or will be created.
+#     sheet_name (str): The name of the sheet where the DataFrame will be saved.
+#     mode (str): The mode for opening the Excel file. 'a' for append, 'w' for write. Default is 'a'.
+#     if_sheet_exists (str): The behavior when the sheet already exists. Options are 'replace', 'new', 'skip'. Default is 'replace'.
+#     index (bool): Whether to include DataFrame index. Default is False.
+#     verbose (bool): Whether to print success message. Default is True.
+
+#     Returns:
+#     None: The function writes the DataFrame to the Excel file and does not return anything.
+#     """
+#     try:
+#         # Check if the file exists
+#         file_exists = os.path.isfile(filepath)
+
+#         # If file doesn't exist, create a new one
+#         if not file_exists:
+#             with pd.ExcelWriter(filepath, engine="openpyxl") as writer:
+#                 df_to_save.to_excel(writer, sheet_name=sheet_name, index=index)
+#             if verbose:
+#                 print(
+#                     f"Excel file created and DataFrame written to '{sheet_name}' at {filepath}."
+#                 )
+#             return
+
+#         # If file exists, load it and append the new sheet
+#         if file_exists and mode == "a":
+#             book = load_workbook(filepath)
+#             with pd.ExcelWriter(
+#                 filepath, engine="openpyxl", mode="a"
+#             ) as writer:
+#                 writer.book = book
+
+#                 # Check if sheet already exists
+#                 if sheet_name in writer.book.sheetnames:
+#                     if if_sheet_exists == "replace":
+#                         idx = writer.book.sheetnames.index(sheet_name)
+#                         std = writer.book.get_sheet_by_name(sheet_name)
+#                         writer.book.remove(std)
+#                         writer.book.create_sheet(sheet_name, idx)
+#                     elif if_sheet_exists == "skip":
+#                         if verbose:
+#                             print(
+#                                 f"Sheet '{sheet_name}' already exists and was skipped."
+#                             )
+#                         return
+#                     elif if_sheet_exists == "new":
+#                         sheet_name = sheet_name + "_new"
+
+#                 df_to_save.to_excel(writer, sheet_name=sheet_name, index=index)
+#                 if verbose:
+#                     print(
+#                         f"DataFrame successfully written to '{sheet_name}' in the Excel file at {filepath}."
+#                     )
+
+#         # If file exists and mode is 'w', create a new file
+#         if file_exists and mode == "w":
+#             with pd.ExcelWriter(
+#                 filepath, engine="openpyxl", mode="w"
+#             ) as writer:
+#                 df_to_save.to_excel(writer, sheet_name=sheet_name, index=index)
+#             if verbose:
+#                 print(
+#                     f"Excel file created and DataFrame written to '{sheet_name}' at {filepath}."
+#                 )
+
+#     except Exception as e:
+#         print(f"An error occurred while writing to the Excel file: {e}")
 
 
 def save_dict_to_json(

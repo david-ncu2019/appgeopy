@@ -136,22 +136,21 @@ def configure_ticks(
 def configure_datetime_ticks(
     ax,
     axis="x",
-    major_interval=None,
-    minor_interval=None,
-    date_format="%Y/%m",
+    major_interval=1,  # Default major interval is set to 1 year
+    date_format="%Y",   # Default format is Year
     start_date=None,
     end_date=None,
     grid=True,
 ):
     """
     Configure datetime tick labels and intervals for the specified axis.
+    Major ticks are set at yearly intervals, and minor ticks are fixed to June 30 every year.
 
     Parameters:
     - ax (matplotlib.axes.Axes): The axis to configure.
-    - axis (str): Specify which axis to configure ('x' or 'y').
-    - major_interval (int or None): Interval in months for major ticks. If None, no major ticks are set.
-    - minor_interval (int or None): Interval in months for minor ticks. If None, no minor ticks are set.
-    - date_format (str): Date format for the tick labels. Default is "%Y/%m".
+    - axis (str): Specify which axis to configure ('x' or 'y'). Default is 'x'.
+    - major_interval (int): Interval in years for major ticks. Default is 1 year.
+    - date_format (str): Date format for the tick labels. Default is "%Y" (yearly format).
     - start_date (datetime or None): Start date for the axis limit. If None, no limit is set.
     - end_date (datetime or None): End date for the axis limit. If None, no limit is set.
     - grid (bool): Whether to show grid lines for the major ticks. Default is True.
@@ -159,19 +158,19 @@ def configure_datetime_ticks(
     Example Usage:
     ```
     fig, ax = plt.subplots()
-    # Example data plotting
     dates = pd.date_range(start="2000-01-01", periods=100, freq="M")
     values = np.random.randn(100).cumsum()
     ax.plot(dates, values)
 
-    # Configure datetime ticks
-    configure_datetime_ticks(ax, axis="x", major_interval=24, minor_interval=12, date_format="%Y/%m",
+    configure_datetime_ticks(ax, axis="x", major_interval=2, date_format="%Y",
                              start_date=datetime(2000, 1, 1), end_date=datetime(2023, 12, 31))
     plt.show()
     ```
     """
+
+    # Configure major ticks at the specified year interval
     if major_interval is not None:
-        major_locator = mdates.MonthLocator(interval=major_interval)
+        major_locator = mdates.YearLocator(base=major_interval)  # Yearly locator with user-defined interval
         if axis == "x":
             ax.xaxis.set_major_locator(major_locator)
         elif axis == "y":
@@ -179,29 +178,31 @@ def configure_datetime_ticks(
         else:
             raise ValueError("Axis must be 'x' or 'y'.")
 
-    if minor_interval is not None:
-        minor_locator = mdates.MonthLocator(interval=minor_interval)
-        if axis == "x":
-            ax.xaxis.set_minor_locator(minor_locator)
-        elif axis == "y":
-            ax.yaxis.set_minor_locator(minor_locator)
-        else:
-            raise ValueError("Axis must be 'x' or 'y'.")
+    # Configure minor ticks to always appear at June 30 (every 6 months)
+    minor_locator = mdates.MonthLocator(bymonth=6, bymonthday=30)  # Fixed minor locator at June (6th month)
+    if axis == "x":
+        ax.xaxis.set_minor_locator(minor_locator)
+    elif axis == "y":
+        ax.yaxis.set_minor_locator(minor_locator)
 
+    # Set the date format for the major ticks
     date_formatter = mdates.DateFormatter(date_format)
     if axis == "x":
         ax.xaxis.set_major_formatter(date_formatter)
     elif axis == "y":
         ax.yaxis.set_major_formatter(date_formatter)
 
+    # Set the date limits for the axis if provided
     if start_date and end_date:
         if axis == "x":
             ax.set_xlim(start_date, end_date)
         elif axis == "y":
             ax.set_ylim(start_date, end_date)
 
+    # Enable grid lines for major ticks if grid is True
     if grid:
-        ax.grid(which="major", axis=axis)
+        ax.grid(which="major", axis=axis, color='lightgrey')
+        ax.grid(which="minor", axis=axis, color='lightgrey', alpha=0.5, linestyle='--')
 
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

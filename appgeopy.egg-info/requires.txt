@@ -1,0 +1,9 @@
+numpy
+pandas
+geopandas
+matplotlib
+scipy
+seaborn
+scikit-learn
+prophet==1.1.1
+holidays==0.24
