@@ -1,10 +1,10 @@
-from typing import List, Tuple
+from typing import List, Tuple, Union
 
 import numpy as np
 import pandas as pd
 import scipy
 from numpy.fft import fft, fftfreq, ifft  # Fast Fourier Transform functions
-from sklearn.linear_model import RANSACRegressor
+from sklearn.linear_model import RANSACRegressor, LinearRegression
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import PolynomialFeatures
 
@@ -38,43 +38,48 @@ def find_peaks_troughs(data_series: pd.Series) -> Tuple[np.ndarray, np.ndarray]:
 
 
 def find_peak_to_peak(
-    df: pd.DataFrame, peak_idx: List[int], trough_idx: List[int]
+    data: Union[pd.DataFrame, pd.Series], peak_idx: List[int], trough_idx: List[int]
 ) -> pd.DataFrame:
     """
     Find the peak-to-peak values in the time-series data.
 
     Parameters:
-    df (pd.DataFrame): The time-series data with datetime index.
+    data (Union[pd.DataFrame, pd.Series]): The time-series data with datetime index.
     peak_idx (List[int]): Indices of the peaks.
     trough_idx (List[int]): Indices of the troughs.
 
     Returns:
     pd.DataFrame: DataFrame with peak and trough dates and values.
     """
-    if not isinstance(df, pd.DataFrame):
-        raise ValueError("Input df must be a pandas DataFrame.")
-
-    if not isinstance(df.index, pd.DatetimeIndex):
-        raise ValueError("DataFrame index must be a DatetimeIndex.")
-
-    if df.shape[1] != 1:
+    # Check if the input is either DataFrame or Series
+    if not isinstance(data, (pd.DataFrame, pd.Series)):
+        raise ValueError("Input data must be a pandas DataFrame or Series.")
+    
+    # Ensure the index is a DatetimeIndex
+    if not isinstance(data.index, pd.DatetimeIndex):
+        raise ValueError("Data index must be a DatetimeIndex.")
+    
+    # If input is a DataFrame, ensure it has only one column
+    if isinstance(data, pd.DataFrame) and data.shape[1] != 1:
         raise ValueError("DataFrame must have a single column of data.")
-
-    # if any(idx >= len(df) or idx < 0 for idx in peak_idx + trough_idx):
-    #     raise IndexError(
-    #         "Peak or trough indices are out of bounds of the DataFrame."
-    #     )
-
-    if df.isnull().any().any():
+    
+    # Handle NaN values
+    if data.isnull().any():
         raise ValueError(
-            "Input DataFrame contains NaN values. Please handle them before using this function."
+            "Input data contains NaN values. Please handle them before using this function."
         )
 
-    peak_dates = df.iloc[peak_idx].idxmax()[0]
-    trough_dates = df.iloc[trough_idx].idxmin()[0]
-    peak_values = df.iloc[peak_idx].max()[0]
-    trough_values = df.iloc[trough_idx].min()[0]
+    # Convert Series to DataFrame for consistent handling
+    if isinstance(data, pd.Series):
+        data = data.to_frame()
+    
+    # Extract peak and trough dates and values
+    peak_dates = data.iloc[peak_idx].idxmax()[0]
+    trough_dates = data.iloc[trough_idx].idxmin()[0]
+    peak_values = data.iloc[peak_idx].max()[0]
+    trough_values = data.iloc[trough_idx].min()[0]
 
+    # Create a DataFrame with the results
     data_cache = {
         "date": [peak_dates, trough_dates],
         "value": [peak_values, trough_values],
@@ -89,12 +94,14 @@ def find_peak_to_peak(
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
-def get_linear_trend(series):
+def get_linear_trend(series, force_zero_intercept=False):
     """
-    Returns the linear trend of a pandas series with missing values using RANSACRegressor.
+    Returns the linear trend of a pandas series with missing values using RANSACRegressor, 
+    with the option to force the intercept to be zero.
 
     Parameters:
         series (pandas.Series): A pandas series with missing values and DatetimeIndex.
+        force_zero_intercept (bool): Whether to force the intercept to be zero. Default is False.
 
     Returns:
         pandas.Series: A pandas series representing the linear trend of the input series.
@@ -106,19 +113,22 @@ def get_linear_trend(series):
     # Create mask for missing values
     isfinite = np.isfinite(series.values)
 
-    # Fit RANSACRegressor to data
+    # Fit RANSACRegressor to data with intercept optionally forced to zero
     X = x[isfinite].reshape(-1, 1)
     y = series.values[isfinite]
-    linear_model = RANSACRegressor(random_state=42)
+    
+    # Create a linear model with or without intercept based on user choice
+    base_estimator = LinearRegression(fit_intercept=not force_zero_intercept)
+    linear_model = RANSACRegressor(base_estimator=base_estimator, random_state=42)
     linear_model.fit(X, y)
 
-    # Get predicted values for linear model
+    # Get predicted values for the linear model
     estimate = linear_model.predict(x.reshape(-1, 1))
 
     # Create pandas series from predicted values
     series_trend = pd.Series(estimate, index=series.index)
 
-    return (series_trend, linear_model.estimator_.coef_[0])
+    return series_trend, linear_model.estimator_.coef_[0]
 
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -126,7 +136,8 @@ def get_linear_trend(series):
 
 def get_polynomial_trend(x, y, order, x_estimate=None):
     """
-    Returns the polynomial trend of the given x and y arrays using RANSACRegressor.
+    Returns the polynomial trend of the given x and y arrays. 
+    First tries RANSACRegressor, and if it fails, falls back on LinearRegression.
 
     Parameters:
         x (array-like): The x-value array.
@@ -150,11 +161,26 @@ def get_polynomial_trend(x, y, order, x_estimate=None):
     X = x[is_finite].reshape(-1, 1)
     y_finite = y[is_finite]
 
-    # Create and fit the polynomial model using RANSAC
-    polynomial_model = make_pipeline(
-        PolynomialFeatures(order), RANSACRegressor(random_state=42)
-    )
-    polynomial_model.fit(X, y_finite)
+    # Try fitting the polynomial model using RANSAC
+    try:
+        polynomial_model = make_pipeline(
+            PolynomialFeatures(order), RANSACRegressor(random_state=42)
+        )
+        polynomial_model.fit(X, y_finite)
+        # If successful, retrieve coefficients from RANSAC
+        coefficients = polynomial_model.named_steps["ransacregressor"].estimator_.coef_
+        # print("RANSACRegressor succeeded.")
+    
+    except Exception as e:
+        # print(f"RANSAC failed: {e}. Falling back to LinearRegression.")
+        
+        # If RANSAC fails, fallback to LinearRegression
+        polynomial_model = make_pipeline(
+            PolynomialFeatures(order), LinearRegression()
+        )
+        polynomial_model.fit(X, y_finite)
+        # Retrieve coefficients from LinearRegression
+        coefficients = polynomial_model.named_steps["linearregression"].coef_
 
     # Predict values using the fitted model
     X_estimate = x_estimate.reshape(-1, 1)
@@ -162,11 +188,6 @@ def get_polynomial_trend(x, y, order, x_estimate=None):
 
     # Create a pandas series from the predicted values
     trend_series = pd.Series(y_estimate, index=x_estimate.flatten())
-
-    # Get the coefficients of the polynomial trend
-    coefficients = polynomial_model.named_steps[
-        "ransacregressor"
-    ].estimator_.coef_
 
     return trend_series, coefficients
 

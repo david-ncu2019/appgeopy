@@ -1,7 +1,6 @@
 import numpy as np
 import pandas as pd
 import h5py
-from collections.abc import Mapping
 
 # ____________________________________________________________________________________________________________________
 # ____________________________________________________________________________________________________________________
@@ -216,19 +215,3 @@ def list_datasets(file):
 
 # ____________________________________________________________________________________________________________________
 # ____________________________________________________________________________________________________________________
-
-def merge_dicts(*dicts):
-    """Recursively merges multiple dictionaries."""
-    result = {}
-    for dictionary in dicts:
-        for key, value in dictionary.items():
-            if isinstance(value, Mapping) and key in result:
-                # If both values are dictionaries, recursively merge them
-                result[key] = merge_dicts(result[key], value)
-            else:
-                # Otherwise, just set the value from the current dictionary
-                result[key] = value
-    return result
-
-# ____________________________________________________________________________________________________________________
-# ____________________________________________________________________________________________________________________    

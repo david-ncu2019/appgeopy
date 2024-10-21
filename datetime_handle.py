@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import sys
 import os
+import re
 
 def get_fulltime(series, freq='D'):
 	try:
@@ -30,15 +31,69 @@ def fulltime_table(df, fulltime_series):
 # ------------------------------------------------------------------------------
 
 def convert_to_datetime(colname):
-	if "N" in colname or "D" in colname:
-		colname = colname[1:]
+    """
+    Convert a string to a datetime object based on specific validation rules.
 
-	return pd.to_datetime(colname)
+    Parameters:
+    - colname (str): The input string to be converted.
+
+    Returns:
+    - datetime: A datetime object representing the date.
+
+    Raises:
+    - ValueError: If the input string does not meet the required format.
+    """
+    # Check if the input contains alphabetical characters
+    match = re.search(r'[A-Za-z]', colname)
+    
+    if match:
+        # Get the last alphabetical character's index and check the remaining string
+        last_alpha_idx = match.end() - 1
+        
+        # Extract the part after the last alphabetical character
+        numeric_part = colname[last_alpha_idx + 1:]
+        
+        # Check if the remaining part has exactly 8 digits
+        if len(numeric_part) == 8 and numeric_part.isdigit():
+            return pd.to_datetime(numeric_part, format='%Y%m%d')
+        else:
+            raise ValueError("Input must end with 'YYYYMMDD' after letters.")
+    
+    # If no alphabetical characters, check if the string is 8 digits
+    elif colname.isdigit() and len(colname) == 8:
+        return pd.to_datetime(colname, format='%Y%m%d')
+    
+    else:
+        raise ValueError("Input must be 'YYYYMMDD' or contain letters followed by 'YYYYMMDD'.")
 
 # ------------------------------------------------------------------------------
 
-def convert_to_stringdatetime(colname):
-    pass
+def datetime_to_string(date, initial_char='N'):
+    """
+    Convert a datetime object to a formatted string with an optional prefix.
+
+    Parameters:
+    - date (datetime): The datetime object to convert.
+    - initial_char (str): The characters to prefix the date string. Default is 'N'.
+
+    Returns:
+    - str: The formatted date string in the form of initial_char + 'YYYYMMDD'.
+
+    Raises:
+    - ValueError: If the input initial_char contains non-alphabetical characters.
+    - TypeError: If the date is not a datetime object.
+    """
+    # Validate input
+    if not isinstance(initial_char, str) or not initial_char.isalpha():
+        raise ValueError("Initial character(s) must only contain alphabetical characters.")
+    if not isinstance(date, (pd.Timestamp, pd.DatetimeIndex, pd.Timestamp)):
+        raise TypeError("The date must be a datetime object.")
+    
+    # Convert datetime to string in 'YYYYMMDD' format
+    date_str = date.strftime('%Y%m%d')
+    
+    # Combine initial character with the formatted date
+    return f"{initial_char}{date_str}"
 
 # ------------------------------------------------------------------------------
 
