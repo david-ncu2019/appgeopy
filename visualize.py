@@ -33,10 +33,19 @@ def calculate_scaling_factor(fig_width, fig_height, base_size=BASE_SIZE):
 
 
 def configure_axis(
-    ax, xlabel="", ylabel="", title="", scaling_factor=1, fontsize_base=18
+    ax, 
+    xlabel="", 
+    ylabel="", 
+    title="", 
+    scaling_factor=1, 
+    fontsize_base=18, 
+    hide_spines=None, 
+    major_tick_length=5, 
+    minor_tick_length=3, 
+    tick_direction="in"
 ):
     """
-    Configure the axis labels, ticks, and title.
+    Configure the axis labels, ticks, title, spine visibility, tick lengths, and tick direction.
 
     Parameters:
     - ax (matplotlib.axes.Axes): The axis to configure.
@@ -45,19 +54,48 @@ def configure_axis(
     - title (str): Title of the axis.
     - scaling_factor (float): Scaling factor for font sizes.
     - fontsize_base (int): Base font size.
+    - hide_spines (list, optional): List of spine names to hide (e.g., ["top", "right"]).
+    - major_tick_length (float): Length of the major ticks.
+    - minor_tick_length (float): Length of the minor ticks.
+    - tick_direction (str): Direction of the ticks; accepts 'in' for inward or 'out' for outward.
+                            Default is 'in'.
+    
+    Raises:
+    - ValueError: If `tick_direction` is not 'in' or 'out'.
     """
+    # Validate the tick direction input.
+    if tick_direction not in ["in", "out"]:
+        raise ValueError("Invalid 'tick_direction' value. Must be 'in' or 'out'.")
+
+    # Calculate font sizes based on the base size and scaling factor.
     label_fontsize = fontsize_base * scaling_factor
-    tick_label_fontsize = fontsize_base * scaling_factor * 1
+    tick_label_fontsize = fontsize_base * scaling_factor
     title_fontsize = fontsize_base * scaling_factor * 1.5
 
+    # Set labels and title with the adjusted font sizes.
     ax.set_xlabel(xlabel, fontsize=label_fontsize)
     ax.set_ylabel(ylabel, fontsize=label_fontsize)
-    ax.tick_params(axis="both", which="major", labelsize=tick_label_fontsize)
+    ax.tick_params(
+        axis="both", 
+        which="major", 
+        labelsize=tick_label_fontsize, 
+        length=major_tick_length, 
+        direction=tick_direction
+    )
+    ax.tick_params(
+        axis="both", 
+        which="minor", 
+        length=minor_tick_length, 
+        direction=tick_direction
+    )
     if title:
-        ax.set_title(title, fontsize=title_fontsize)
+        ax.set_title(title, fontsize=title_fontsize, fontweight='bold', pad=12)
 
-    ax.spines["right"].set_visible(False)
-    ax.spines["top"].set_visible(False)
+    # Hide specified spines, if provided.
+    if hide_spines:
+        for spine in hide_spines:
+            if spine in ax.spines:
+                ax.spines[spine].set_visible(False)
 
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

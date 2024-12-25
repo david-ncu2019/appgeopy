@@ -3,6 +3,7 @@ import pandas as pd
 import geopandas as gpd
 from pyproj import CRS
 from shapely.geometry import Point
+# import pygeos
 
 # Filter Warnings
 warnings.filterwarnings("ignore")  # Suppress all warnings
@@ -114,5 +115,26 @@ def find_point_neighbors(
     # selected_points[central_key_column] = key_value
 
     return selected_points
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+# def find_point_neighbors_pygeos(central_point, target_points_gdf, central_key_column, buffer_radius):
+#     # Convert geometries to pygeos geometries
+#     central_point_geom = pygeos.from_shapely(central_point.geometry)
+#     target_points_geom = pygeos.from_shapely(target_points_gdf.geometry)
+
+#     # Create buffer around the central point
+#     buffer = pygeos.buffer(central_point_geom, buffer_radius)
+
+#     # Find points within the buffer
+#     within_buffer = pygeos.within(target_points_geom, buffer)
+
+#     # Filter the target points
+#     selected_points = target_points_gdf[within_buffer]
+
+#     # Assign the central point's key to selected points
+#     selected_points[central_key_column] = central_point[central_key_column]
+
+#     return selected_points
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

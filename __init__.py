@@ -10,6 +10,7 @@ from .geospatial import *
 from .modeling import *
 from .smoothing import *
 from .visualize import *
+from .interpolate import *
 
 # Import gwatertools package
 from .insartools import *

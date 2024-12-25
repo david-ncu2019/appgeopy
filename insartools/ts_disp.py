@@ -1,14 +1,23 @@
 from numpy import pi, sin, cos
+import numpy as np
 
 def degree_to_radian(degree):
-    rad = degree * pi / 180
-    return rad
+    """
+    Convert degree to radians.
+    Args:
+    degree (float): Angle in degrees
+    
+    Returns:
+    float: Angle in radians
+    """
+    return np.radians(degree)  # Using numpy for clarity and efficiency
 
 # ------------------------------------------------------------------------------
 
 def get_LOS_disp(dN, dE, dU, incidence_angle=37, heading_angle=347.6):
     """
-    Calculates the line-of-sight (LOS) displacement for a given set of north, east, and up displacement components, as well as an incidence angle and heading angle.
+    Calculates the line-of-sight (LOS) displacement for a given set of north, east, and up displacement components,
+    as well as an incidence angle and heading angle.
 
     Args:
     dN (float): North displacement component in meters
@@ -20,19 +29,18 @@ def get_LOS_disp(dN, dE, dU, incidence_angle=37, heading_angle=347.6):
     Returns:
     float: The LOS displacement in meters
     """
-    from numpy import cos, pi, sin
-
+    # Convert incidence and heading angles from degrees to radians
     incidence_rad = degree_to_radian(incidence_angle)
     azi_rad = degree_to_radian(heading_angle)
 
+    # Calculate LOS displacement using the formula
     LOS_disp = (
-        dU * cos(incidence_rad)
-        + dN * sin(incidence_rad) * sin(azi_rad)
-        - dE * sin(incidence_rad) * cos(azi_rad)
+        dU * np.cos(incidence_rad) +
+        dN * np.sin(incidence_rad) * np.sin(azi_rad) -
+        dE * np.sin(incidence_rad) * np.cos(azi_rad)
     )
 
     return LOS_disp
-
 # ------------------------------------------------------------------------------
 
 def compare_LOS_disp(psc_df, gps_df, mutual_index):
@@ -112,3 +120,8 @@ def convert_cumdisp_to_disp(cumulative_series):
 
     return displacement_series
 
+# ------------------------------------------------------------------------------
+
+
+
+# ------------------------------------------------------------------------------
