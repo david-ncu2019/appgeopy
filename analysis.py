@@ -111,7 +111,7 @@ def get_linear_trend(series, force_zero_intercept=False):
     x = np.arange(series.size)
 
     # Create mask for missing values
-    isfinite = np.isfinite(series.values)
+    isfinite = np.isfinite(series.values).flatten()
 
     # Fit RANSACRegressor to data with intercept optionally forced to zero
     X = x[isfinite].reshape(-1, 1)
@@ -119,7 +119,7 @@ def get_linear_trend(series, force_zero_intercept=False):
     
     # Create a linear model with or without intercept based on user choice
     base_estimator = LinearRegression(fit_intercept=not force_zero_intercept)
-    linear_model = RANSACRegressor(base_estimator=base_estimator, random_state=42)
+    linear_model = RANSACRegressor(estimator=base_estimator, random_state=42)
     linear_model.fit(X, y)
 
     # Get predicted values for the linear model
@@ -133,63 +133,103 @@ def get_linear_trend(series, force_zero_intercept=False):
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-
-def get_polynomial_trend(x, y, order, x_estimate=None):
+def get_polynomial_trend(series: pd.Series, order: int = 2) -> Tuple[pd.Series, np.ndarray]:
     """
-    Returns the polynomial trend of the given x and y arrays. 
-    First tries RANSACRegressor, and if it fails, falls back on LinearRegression.
+    Fits a polynomial trend of specified order to a pandas series with missing values.
 
     Parameters:
-        x (array-like): The x-value array.
-        y (array-like): The y-value array with potential missing values.
-        order (int): The order of polynomial fitting.
-        x_estimate (array-like, optional): The x-value array for estimating the y-value array.
-                                           If None, the input x-value array is used.
+        series (pandas.Series): A pandas series with missing values and DatetimeIndex.
+        order (int): The order of the polynomial trend. Default is 2 (quadratic).
 
     Returns:
-        pandas.Series: A pandas series representing the polynomial trend of the input series.
-        array-like: The coefficients of the polynomial trend.
+        pandas.Series: A pandas series representing the estimated polynomial trend.
+        np.ndarray: Array of polynomial coefficients in decreasing order.
     """
-    # Use input x-value array if x_estimate is not provided
-    if x_estimate is None:
-        x_estimate = x
+    # Ensure input is a Pandas Series
+    if not isinstance(series, pd.Series):
+        raise ValueError("Input must be a pandas Series.")
 
-    # Create mask for finite values
-    is_finite = np.isfinite(y)
+    # Get x values (time index as numerical values)
+    x = np.arange(series.size)
 
-    # Prepare data for model fitting
-    X = x[is_finite].reshape(-1, 1)
-    y_finite = y[is_finite]
+    # Mask missing values
+    isfinite = np.isfinite(series.values).flatten()
+    X = x[isfinite].reshape(-1, 1)
+    y = series.values[isfinite]
 
-    # Try fitting the polynomial model using RANSAC
-    try:
-        polynomial_model = make_pipeline(
-            PolynomialFeatures(order), RANSACRegressor(random_state=42)
-        )
-        polynomial_model.fit(X, y_finite)
-        # If successful, retrieve coefficients from RANSAC
-        coefficients = polynomial_model.named_steps["ransacregressor"].estimator_.coef_
-        # print("RANSACRegressor succeeded.")
+    # Transform features to polynomial terms
+    poly = PolynomialFeatures(degree=order)
+    X_poly = poly.fit_transform(X)
+
+    # Fit polynomial regression model
+    model = LinearRegression(fit_intercept=False)  # Intercept is handled by poly transformation
+    model.fit(X_poly, y)
+
+    # Generate trend using the fitted model
+    full_X_poly = poly.transform(x.reshape(-1, 1))
+    trend_values = model.predict(full_X_poly)
+
+    # Create a pandas series with trend values
+    trend_series = pd.Series(trend_values, index=series.index)
+
+    return trend_series, model.coef_
+
+# def get_polynomial_trend(x, y, order, x_estimate=None):
+#     """
+#     Returns the polynomial trend of the given x and y arrays. 
+#     First tries RANSACRegressor, and if it fails, falls back on LinearRegression.
+
+#     Parameters:
+#         x (array-like): The x-value array.
+#         y (array-like): The y-value array with potential missing values.
+#         order (int): The order of polynomial fitting.
+#         x_estimate (array-like, optional): The x-value array for estimating the y-value array.
+#                                            If None, the input x-value array is used.
+
+#     Returns:
+#         pandas.Series: A pandas series representing the polynomial trend of the input series.
+#         array-like: The coefficients of the polynomial trend.
+#     """
+#     # Use input x-value array if x_estimate is not provided
+#     if x_estimate is None:
+#         x_estimate = x
+
+#     # Create mask for finite values
+#     is_finite = np.isfinite(y)
+
+#     # Prepare data for model fitting
+#     X = x[is_finite].reshape(-1, 1)
+#     y_finite = y[is_finite]
+
+#     # Try fitting the polynomial model using RANSAC
+#     try:
+#         polynomial_model = make_pipeline(
+#             PolynomialFeatures(order), RANSACRegressor(random_state=42)
+#         )
+#         polynomial_model.fit(X, y_finite)
+#         # If successful, retrieve coefficients from RANSAC
+#         coefficients = polynomial_model.named_steps["ransacregressor"].estimator_.coef_
+#         # print("RANSACRegressor succeeded.")
     
-    except Exception as e:
-        # print(f"RANSAC failed: {e}. Falling back to LinearRegression.")
+#     except Exception as e:
+#         # print(f"RANSAC failed: {e}. Falling back to LinearRegression.")
         
-        # If RANSAC fails, fallback to LinearRegression
-        polynomial_model = make_pipeline(
-            PolynomialFeatures(order), LinearRegression()
-        )
-        polynomial_model.fit(X, y_finite)
-        # Retrieve coefficients from LinearRegression
-        coefficients = polynomial_model.named_steps["linearregression"].coef_
+#         # If RANSAC fails, fallback to LinearRegression
+#         polynomial_model = make_pipeline(
+#             PolynomialFeatures(order), LinearRegression()
+#         )
+#         polynomial_model.fit(X, y_finite)
+#         # Retrieve coefficients from LinearRegression
+#         coefficients = polynomial_model.named_steps["linearregression"].coef_
 
-    # Predict values using the fitted model
-    X_estimate = x_estimate.reshape(-1, 1)
-    y_estimate = polynomial_model.predict(X_estimate)
+#     # Predict values using the fitted model
+#     X_estimate = x_estimate.reshape(-1, 1)
+#     y_estimate = polynomial_model.predict(X_estimate)
 
-    # Create a pandas series from the predicted values
-    trend_series = pd.Series(y_estimate, index=x_estimate.flatten())
+#     # Create a pandas series from the predicted values
+#     trend_series = pd.Series(y_estimate, index=x_estimate.flatten())
 
-    return trend_series, coefficients
+#     return trend_series, coefficients
 
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

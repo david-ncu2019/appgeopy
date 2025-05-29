@@ -18,36 +18,45 @@ def get_fulltime(series, freq='D'):
 
 def fulltime_table(df, fulltime_series):
     """
-    Create a DataFrame that combines the input DataFrame with the missing dates from a full time series.
+    Align a pandas Series/DataFrame to a full timeline by inserting NaNs for missing dates.
 
     Parameters:
-    - df (pd.DataFrame): The input DataFrame with a datetime index.
-    - fulltime_series (pd.DatetimeIndex): A series of dates representing the complete time range.
+        df (pd.Series or pd.DataFrame): Input data with datetime index.
+        fulltime_series (pd.DatetimeIndex): Complete reference time index.
 
     Returns:
-    - pd.DataFrame: A DataFrame with the full time series, including null rows for missing dates.
-    
-    Raises:
-    - ValueError: If the data types of the DataFrame index and full time series do not match.
+        pd.Series or pd.DataFrame: Data aligned to full timeline, preserving input type.
     """
-    if isinstance(df.index[0], type(fulltime_series[0])):
-        # Calculate the remaining dates after removing those already in the df index.
-        df_indexes = set(df.index)
-        fulltime_series = set(fulltime_series)
-        remaining_dates = sorted(fulltime_series.difference(df_indexes))
-        
-        # Create a null DataFrame with the remaining dates as its index.
-        null_table = pd.DataFrame(
-            data=None,
-            columns=df.columns,
-            index=remaining_dates
-        )
-        
-        # Concatenate the original DataFrame with the null table and sort by index.
-        combined_df = pd.concat([df, null_table]).sort_index()
-        return combined_df
-    else:
-        raise ValueError("Data types of DataFrame index and input series do not match")
+    # Check if input is a Series (store metadata to restore later)
+    is_series = isinstance(df, pd.Series)
+    original_name = df.name if is_series else None
+    
+    # Convert Series → DataFrame to unify processing
+    if is_series:
+        df = df.to_frame(name=original_name if original_name else 'value')
+    
+    # Validate index types match
+    if not isinstance(df.index, type(fulltime_series)):
+        raise ValueError("Index type of `df` must match `fulltime_series` (e.g., DatetimeIndex)")
+    
+    # Get missing dates (using Pandas index operations)
+    missing_dates = fulltime_series.difference(df.index)
+    
+    # Create NaN entries for missing dates
+    null_table = pd.DataFrame(
+        columns=df.columns,
+        index=missing_dates,
+        dtype=df.dtypes.iloc[0] if not df.empty else None
+    )
+    
+    # Concatenate and sort
+    combined = pd.concat([df, null_table]).sort_index()
+    
+    # Convert back to Series if input was a Series
+    if is_series:
+        combined = combined.squeeze().rename(original_name)
+    
+    return combined
 
 # ------------------------------------------------------------------------------
 

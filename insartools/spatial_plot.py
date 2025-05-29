@@ -31,9 +31,7 @@ def calculate_scaling_factor(fig_width, fig_height, base_size=BASE_SIZE):
 # ------------------------------------------------------------------------------
 
 
-def configure_axis(
-    ax, xlabel="", ylabel="", title="", scaling_factor=1, fontsize_base=18
-):
+def configure_axis(ax, xlabel="", ylabel="", title="", scaling_factor=1, fontsize_base=18):
     """
     Configure the axis labels, ticks, and title.
 
@@ -104,9 +102,7 @@ def show_points(gdf, ax=None, color="blue", marker="o", alpha=0.7, **kwargs):
 # ------------------------------------------------------------------------------
 
 
-def show_polygons(
-    gdf, ax=None, facecolor="blue", edgecolor="black", alpha=0.5, **kwargs
-):
+def show_polygons(gdf, ax=None, facecolor="blue", edgecolor="black", alpha=0.5, **kwargs):
     """
     Plot polygon data from a GeoDataFrame.
 
@@ -124,10 +120,31 @@ def show_polygons(
     if ax is None:
         fig, ax = plt.subplots()
 
-    gdf.plot(
-        ax=ax, facecolor=facecolor, edgecolor=edgecolor, alpha=alpha, **kwargs
-    )
+    gdf.plot(ax=ax, facecolor=facecolor, edgecolor=edgecolor, alpha=alpha, **kwargs)
 
+    return ax
+
+
+# ------------------------------------------------------------------------------
+def show_polylines(gdf, ax=None, color="blue", linestyle="-", linewidth=1.5, alpha=0.7, **kwargs):
+    """
+    Plot polyline data from a GeoDataFrame.
+
+    Parameters:
+    - gdf (GeoDataFrame): GeoDataFrame containing polyline data (LineString or MultiLineString).
+    - ax (matplotlib.axes.Axes, optional): Axes to plot on. If None, create new axes.
+    - color (str): Color of the polylines.
+    - linestyle (str): Style of the lines ('-', '--', '-.', ':').
+    - linewidth (float): Width of the lines.
+    - alpha (float): Transparency level.
+    - kwargs: Additional keyword arguments for customization.
+
+    Returns:
+    - ax: Matplotlib Axes object with the plot.
+    """
+    if ax is None:
+        fig, ax = plt.subplots()
+    gdf.plot(ax=ax, color=color, linestyle=linestyle, linewidth=linewidth, alpha=alpha, **kwargs)
     return ax
 
 
@@ -150,7 +167,7 @@ def add_basemap(ax, zoom=10, crs=None, source=ctx.providers.CartoDB.Positron):
     if crs is None:
         crs = ax.get_xlim()[0].crs
 
-    ctx.add_basemap(ax, zoom=zoom, crs=crs, source=source)
+    ctx.add_basemap(ax, zoom=zoom, crs=crs, source=source, attribution="", zorder=-1)
     return ax
 
 
@@ -191,9 +208,7 @@ def point_values(
 
     # Error handling for missing value_column
     if value_column not in gdf.columns:
-        raise ValueError(
-            f"'{value_column}' is not a column in the GeoDataFrame."
-        )
+        raise ValueError(f"'{value_column}' is not a column in the GeoDataFrame.")
 
     # Set default vmin and vmax if not provided
     if vmin is None:
@@ -216,10 +231,9 @@ def point_values(
         **kwargs,
     )
 
-    
     # Add color bar
     if show_colorbar:
-        cbar = plt.colorbar(scatter, ax=ax, pad=0.02, aspect=50)
+        cbar = plt.colorbar(scatter, ax=ax, pad=0.02, aspect=50, shrink=0.75)
         # cbar.set_label(value_column)
 
     return ax
@@ -353,63 +367,63 @@ def spatial_interpolation(
     It is useful for visualizing spatial variations and trends across a plane.
 
     Parameters:
-    - data (pd.DataFrame): 
+    - data (pd.DataFrame):
         DataFrame containing the data points with coordinates and values.
-    - x_col (str): 
+    - x_col (str):
         Column name for the X coordinates in the DataFrame.
-    - y_col (str): 
+    - y_col (str):
         Column name for the Y coordinates in the DataFrame.
-    - value_col (str): 
+    - value_col (str):
         Column name for the values to interpolate in the DataFrame.
-    - method (str, optional): 
+    - method (str, optional):
         RBF function to use for interpolation. Options include:
         'multiquadric', 'inverse', 'gaussian', 'linear', 'cubic', 'quintic', 'thin_plate'.
         Default is 'linear'.
-    - grid_resolution (int, optional): 
+    - grid_resolution (int, optional):
         Resolution of the grid for interpolation. Higher values produce finer grids.
         Default is 100.
-    - cmap (str or Colormap, optional): 
+    - cmap (str or Colormap, optional):
         Colormap to use for the plot. Default is 'viridis'.
-    - colorbar_label (str, optional): 
+    - colorbar_label (str, optional):
         Label for the colorbar. Default is 'Interpolated Values'.
-    - title (str, optional): 
+    - title (str, optional):
         Title of the plot. Default is 'RBF Interpolation'.
-    - xlabel (str, optional): 
+    - xlabel (str, optional):
         Label for the X-axis. Default is 'X'.
-    - ylabel (str, optional): 
+    - ylabel (str, optional):
         Label for the Y-axis. Default is 'Y'.
-    - show_colorbar (bool, optional): 
+    - show_colorbar (bool, optional):
         Whether to display the colorbar. Default is True.
-    - alpha (float, optional): 
+    - alpha (float, optional):
         Transparency level of the interpolated surface. Default is 0.7.
-    - figsize (tuple, optional): 
+    - figsize (tuple, optional):
         Size of the figure in inches (width, height). Default is (11.7, 8.27).
-    - vmin (float, optional): 
+    - vmin (float, optional):
         Minimum value for color normalization. If None, the minimum value from the data is used.
-    - vmax (float, optional): 
+    - vmax (float, optional):
         Maximum value for color normalization. If None, the maximum value from the data is used.
-    - ax (matplotlib.axes.Axes, optional): 
+    - ax (matplotlib.axes.Axes, optional):
         Axes to plot on. If None, new axes are created.
-    - **kwargs: 
+    - **kwargs:
         Additional keyword arguments for RBF interpolation or contour plotting.
 
     Returns:
-    - fig (matplotlib.figure.Figure): 
+    - fig (matplotlib.figure.Figure):
         The figure object containing the plot.
-    - ax (matplotlib.axes.Axes): 
+    - ax (matplotlib.axes.Axes):
         The axes object containing the plot.
 
     Example usage:
     ```
     fig, ax = spatial_interpolation(
-        data=df, 
-        x_col='longitude', 
-        y_col='latitude', 
-        value_col='value', 
-        method='linear', 
-        grid_resolution=200, 
-        cmap='plasma', 
-        vmin=0, 
+        data=df,
+        x_col='longitude',
+        y_col='latitude',
+        value_col='value',
+        method='linear',
+        grid_resolution=200,
+        cmap='plasma',
+        vmin=0,
         vmax=100
     )
     plt.show()
@@ -453,9 +467,7 @@ def spatial_interpolation(
     levels = np.arange(vmin, vmax + 1, 5)
 
     # Plot the interpolated surface
-    contour = ax.contourf(
-        grid_x, grid_y, grid_z, levels=levels, cmap=cmap, norm=norm, alpha=alpha
-    )
+    contour = ax.contourf(grid_x, grid_y, grid_z, levels=levels, cmap=cmap, norm=norm, alpha=alpha)
 
     # Add a colorbar
     if show_colorbar:
@@ -463,10 +475,32 @@ def spatial_interpolation(
         cbar.set_label(colorbar_label)
 
     # Configure the axes
-    configure_axis(
-        ax, xlabel=xlabel, ylabel=ylabel, title=title, fontsize_base=14
-    )
+    configure_axis(ax, xlabel=xlabel, ylabel=ylabel, title=title, fontsize_base=14)
 
     return fig, ax
+
+
+# ------------------------------------------------------------------------------
+
+def set_plot_bounds(ax, geometry, buffer_factor=0.05):
+    """Force axes viewport to focus on specific geometry with buffer zone.
+
+    Args:
+        ax: Matplotlib axes object
+        geometry: GeoDataFrame to focus on
+        buffer_factor: Proportional padding (0.05 = 5%)
+    """
+    # Extract bounds
+    minx, miny, maxx, maxy = geometry.total_bounds
+
+    # Apply buffer
+    width, height = maxx - minx, maxy - miny
+    x_buffer, y_buffer = width * buffer_factor, height * buffer_factor
+
+    # Set viewport
+    ax.set_xlim(minx - x_buffer, maxx + x_buffer)
+    ax.set_ylim(miny - y_buffer, maxy + y_buffer)
+
+    return ax
 
 # ------------------------------------------------------------------------------

@@ -200,20 +200,21 @@ def fit_sinusoidal_model(
         The signal estimated by the fitted sinusoidal model.
     """
     guess_params = np.concatenate((phase_shifts, [baseline]))
-    tol = 1e-12
+    tol = 1e-10
 
     try:
         run_lstsq = least_squares(
             least_squares_loss,
             guess_params,
             args=(time_values, observed_values, amplitudes, periods),
-            loss="soft_l1",
+            loss="soft_l1", #"soft_l1" # "cauchy"
             ftol=tol,
             xtol=tol,
             gtol=tol,
             method="trf",
-            max_nfev=1000
-            # tr_solver="lsmr",
+            jac="3-point",
+            max_nfev=10_000,
+            tr_solver="lsmr",
         )
     except Exception as e:
         print(e)

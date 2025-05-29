@@ -101,7 +101,7 @@ def configure_axis(
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
-def configure_legend(ax, scaling_factor=1, fontsize_base=18, frameon=False):
+def configure_legend(ax, scaling_factor=1, fontsize_base=18, frameon=False, **kwargs):
     """
     Configure the legend.
 
@@ -115,8 +115,9 @@ def configure_legend(ax, scaling_factor=1, fontsize_base=18, frameon=False):
     ax.legend(
         fontsize=legend_fontsize,
         frameon=frameon,
-        labelspacing=0.1,
-        handletextpad=0.2,
+        #labelspacing=0.1,
+        #handletextpad=0.2,
+        **kwargs,
     )
 
 
@@ -180,10 +181,11 @@ def configure_datetime_ticks(
     start_date=None,
     end_date=None,
     grid=True,
+    fontsize=10,  # Add fontsize parameter with default value
 ):
     """
     Configure datetime tick labels and intervals for the specified axis.
-
+    
     Parameters:
     - ax (matplotlib.axes.Axes): The axis to configure.
     - axis (str): Specify which axis to configure ('x' or 'y').
@@ -193,20 +195,7 @@ def configure_datetime_ticks(
     - start_date (datetime or None): Start date for the axis limit. If None, no limit is set.
     - end_date (datetime or None): End date for the axis limit. If None, no limit is set.
     - grid (bool): Whether to show grid lines for the major ticks. Default is True.
-
-    Example Usage:
-    ```
-    fig, ax = plt.subplots()
-    # Example data plotting
-    dates = pd.date_range(start="2000-01-01", periods=100, freq="M")
-    values = np.random.randn(100).cumsum()
-    ax.plot(dates, values)
-
-    # Configure datetime ticks
-    configure_datetime_ticks(ax, axis="x", major_interval=24, minor_interval=12, date_format="%Y/%m",
-                             start_date=datetime(2000, 1, 1), end_date=datetime(2023, 12, 31))
-    plt.show()
-    ```
+    - fontsize (int): Font size for tick labels. Default is 10.
     """
     if major_interval is not None:
         major_locator = mdates.MonthLocator(interval=major_interval)
@@ -216,7 +205,7 @@ def configure_datetime_ticks(
             ax.yaxis.set_major_locator(major_locator)
         else:
             raise ValueError("Axis must be 'x' or 'y'.")
-
+    
     if minor_interval is not None:
         minor_locator = mdates.MonthLocator(interval=minor_interval)
         if axis == "x":
@@ -225,19 +214,23 @@ def configure_datetime_ticks(
             ax.yaxis.set_minor_locator(minor_locator)
         else:
             raise ValueError("Axis must be 'x' or 'y'.")
-
+    
     date_formatter = mdates.DateFormatter(date_format)
     if axis == "x":
         ax.xaxis.set_major_formatter(date_formatter)
+        # Set font size for x-axis tick labels
+        ax.xaxis.set_tick_params(labelsize=fontsize)
     elif axis == "y":
         ax.yaxis.set_major_formatter(date_formatter)
-
+        # Set font size for y-axis tick labels
+        ax.yaxis.set_tick_params(labelsize=fontsize)
+    
     if start_date and end_date:
         if axis == "x":
             ax.set_xlim(start_date, end_date)
         elif axis == "y":
             ax.set_ylim(start_date, end_date)
-
+    
     if grid:
         ax.grid(which="major", axis=axis)
 
@@ -469,6 +462,44 @@ def save_figure(
         logging.error(f"Failed to save figure at '{savepath}': {e}")
         print(f"Failed to save figure at '{savepath}': {e}")
 
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+def save_figure_with_exact_dimensions(
+    fig, savepath, width_px, height_px, dpi=100, format=None, transparent=False, facecolor=None
+):
+    # Calculate dimensions in matplotlib's internal unit (inches)
+    width_in = width_px / dpi
+    height_in = height_px / dpi
+
+    # Store original configuration
+    original_size = fig.get_size_inches()
+    original_tight_layout = fig.get_tight_layout()
+
+    # Apply strict dimensional control
+    fig.set_size_inches(width_in, height_in, forward=True)
+    fig.set_tight_layout(True)
+
+    # Eliminate automatic margin adjustments
+    plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
+
+    # Disable DPI figure-wide auto-scaling
+    fig.set_dpi(dpi)
+
+    # Save with explicit parameters to prevent backend auto-adjustment
+    fig.savefig(
+        savepath,
+        dpi=dpi,
+        format=format,
+        bbox_inches=None,  # Critical: prevents automatic bbox calculation
+        pad_inches=0,  # Eliminates padding that affects dimensions
+        transparent=transparent,
+        facecolor=facecolor,
+    )
+
+    # Restore original configuration
+    fig.set_size_inches(*original_size)
+    fig.set_tight_layout(original_tight_layout)
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 

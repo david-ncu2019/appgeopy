@@ -240,7 +240,7 @@ def open_HDF5(fpath):
     """
     # Extract existing data and metadata
     with h5py.File(fpath, "r") as hdf5_file:
-        data_dict = gwatertools.h5pytools.hdf5_to_data_dict(hdf5_file)
-        metadata_dict = gwatertools.h5pytools.hdf5_to_metadata_dict(hdf5_file)
+        data_dict = hdf5_to_data_dict(hdf5_file)
+        metadata_dict = hdf5_to_metadata_dict(hdf5_file)
 
     return [data_dict, metadata_dict]
