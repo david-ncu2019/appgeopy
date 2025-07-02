@@ -1,7 +1,7 @@
 import pandas as pd
 import json
 
-class InOut:
+class FileIO:
     """All data input/output operations"""
     
     @staticmethod

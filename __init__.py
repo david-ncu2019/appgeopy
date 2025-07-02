@@ -4,16 +4,11 @@ import warnings  # Warning control
 # Filter Warnings
 warnings.filterwarnings("ignore")  # Suppress all warnings
 
-from .analysis import *
-from .data_io import *
-from .datetime_handle import *
-from .geospatial import *
-from .modeling import *
-from .smoothing import *
-from .visualize import *
-from .interpolate import *
+# Clean namespace - import key classes only
+from .data import TimeSeries, SpatialSeries, IO, Storage
+from .temporal import DateTime, TrendAnalysis, SeasonalAnalysis, PeakDetection, Models
+from .spatial import Proximity, Geometry, Displacement
+from .visualization import TimePlots, SpatialPlots, Charts
+from .applications import MLCW
 
-# Import gwatertools package
-from .insartools import *
-from .gwatertools import *
-from .mlcwtools import *
+__version__ = "0.2.0"
