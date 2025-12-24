@@ -100,7 +100,7 @@ def plot_jump_correction(original, corrected, jump_dates, offsets, save_path):
     plt.close()
 
 
-def run_jump_correction(timeseries, station_name, jump_dates, output_dir='02_jump_corrected'):
+def run_jump_correction(timeseries, station_name, jump_dates, output_dir='02_jump_corrected', savefig=False):
     """
     Correct jumps and save results.
     
@@ -126,11 +126,13 @@ def run_jump_correction(timeseries, station_name, jump_dates, output_dir='02_jum
     csv_path = output_path / f"{station_name}_corrected.csv"
     corrected.to_csv(csv_path, header=True)
     
-    plot_path = output_path / f"{station_name}_correction.png"
-    plot_jump_correction(timeseries, corrected, jump_dates, offsets, plot_path)
+    if savefig:
+        plot_path = output_path / f"{station_name}_correction.png"
+        plot_jump_correction(timeseries, corrected, jump_dates, offsets, plot_path)
     
     print(f"\nOutputs:")
     print(f"  {csv_path}")
-    print(f"  {plot_path}")
+    if savefig:
+        print(f"  {plot_path}")
     
     return corrected

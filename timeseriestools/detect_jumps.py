@@ -189,7 +189,7 @@ def plot_jump_detection(timeseries, jump_dates, jump_types, gaps, save_path):
 
 
 def run_jump_detection(timeseries, station_name, output_dir='01_jump_detection', 
-                       penalty=20, min_segment_days=90, gap_threshold_days=60):
+                       penalty=20, min_segment_days=90, gap_threshold_days=60, savefig=False):
     """
     Run jump detection and save results for manual review.
     
@@ -234,9 +234,10 @@ def run_jump_detection(timeseries, station_name, output_dir='01_jump_detection',
     with open(json_path, 'w') as f:
         json.dump(results, f, indent=2)
     
-    # Save plot
-    plot_path = output_path / f"{station_name}_detection.png"
-    plot_jump_detection(timeseries, jump_dates, jump_types, gaps, plot_path)
+    if savefig:
+        # Save plot
+        plot_path = output_path / f"{station_name}_detection.png"
+        plot_jump_detection(timeseries, jump_dates, jump_types, gaps, plot_path)
     
     # Print summary
     equipment_jumps = [j for j in results['detected_jumps'] if j['type'] == 'equipment_change']
@@ -251,7 +252,8 @@ def run_jump_detection(timeseries, station_name, output_dir='01_jump_detection',
     
     print(f"\nOutputs:")
     print(f"  {json_path}")
-    print(f"  {plot_path}")
+    if savefig:
+        print(f"  {plot_path}")
     print(f"\n→ Review and select real jumps for next step")
     
     return results
