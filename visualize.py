@@ -115,8 +115,8 @@ def configure_legend(ax, scaling_factor=1, fontsize_base=18, frameon=False, **kw
     ax.legend(
         fontsize=legend_fontsize,
         frameon=frameon,
-        #labelspacing=0.1,
-        #handletextpad=0.2,
+        # labelspacing=0.1,
+        # handletextpad=0.2,
         **kwargs,
     )
 

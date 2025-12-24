@@ -183,7 +183,7 @@ def point_values(
     alpha=0.7,
     vmin=None,
     vmax=None,
-    show_colorbar=True,
+    show_colorbar=True, # This argument will now be used to disable the default colorbar
     **kwargs,
 ):
     """
@@ -231,12 +231,13 @@ def point_values(
         **kwargs,
     )
 
-    # Add color bar
+    # CHANGE 1: Only show the colorbar here if explicitly requested.
+    # We will control this from our main script.
     if show_colorbar:
         cbar = plt.colorbar(scatter, ax=ax, pad=0.02, aspect=50, shrink=0.75)
-        # cbar.set_label(value_column)
 
-    return ax
+    # CHANGE 2: Return the 'scatter' object, which is the mappable.
+    return scatter
 
 
 # ------------------------------------------------------------------------------

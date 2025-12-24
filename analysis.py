@@ -107,6 +107,11 @@ def get_linear_trend(series, force_zero_intercept=False):
         pandas.Series: A pandas series representing the linear trend of the input series.
         float: The slope of the linear trend.
     """
+    # --- FIX START: Ensure data is numeric ---
+    # This converts 'object' types to float, and turns strings/errors into NaN
+    series = pd.to_numeric(series, errors='coerce') 
+    # --- FIX END ---
+    
     # Get x values
     x = np.arange(series.size)
 
@@ -133,171 +138,248 @@ def get_linear_trend(series, force_zero_intercept=False):
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-def get_polynomial_trend(series: pd.Series, order: int = 2) -> Tuple[pd.Series, np.ndarray]:
-    """
-    Fits a polynomial trend of specified order to a pandas series with missing values.
-
-    Parameters:
-        series (pandas.Series): A pandas series with missing values and DatetimeIndex.
-        order (int): The order of the polynomial trend. Default is 2 (quadratic).
-
-    Returns:
-        pandas.Series: A pandas series representing the estimated polynomial trend.
-        np.ndarray: Array of polynomial coefficients in decreasing order.
-    """
-    # Ensure input is a Pandas Series
-    if not isinstance(series, pd.Series):
-        raise ValueError("Input must be a pandas Series.")
-
-    # Get x values (time index as numerical values)
-    x = np.arange(series.size)
-
-    # Mask missing values
-    isfinite = np.isfinite(series.values).flatten()
-    X = x[isfinite].reshape(-1, 1)
-    y = series.values[isfinite]
-
-    # Transform features to polynomial terms
-    poly = PolynomialFeatures(degree=order)
-    X_poly = poly.fit_transform(X)
-
-    # Fit polynomial regression model
-    model = LinearRegression(fit_intercept=False)  # Intercept is handled by poly transformation
-    model.fit(X_poly, y)
-
-    # Generate trend using the fitted model
-    full_X_poly = poly.transform(x.reshape(-1, 1))
-    trend_values = model.predict(full_X_poly)
-
-    # Create a pandas series with trend values
-    trend_series = pd.Series(trend_values, index=series.index)
-
-    return trend_series, model.coef_
-
-# def get_polynomial_trend(x, y, order, x_estimate=None):
+# def get_polynomial_trend(series: pd.Series, order: int = 2) -> Tuple[pd.Series, np.ndarray]:
 #     """
-#     Returns the polynomial trend of the given x and y arrays. 
-#     First tries RANSACRegressor, and if it fails, falls back on LinearRegression.
+#     Fits a polynomial trend of specified order to a pandas series with missing values.
 
 #     Parameters:
-#         x (array-like): The x-value array.
-#         y (array-like): The y-value array with potential missing values.
-#         order (int): The order of polynomial fitting.
-#         x_estimate (array-like, optional): The x-value array for estimating the y-value array.
-#                                            If None, the input x-value array is used.
+#         series (pandas.Series): A pandas series with missing values and DatetimeIndex.
+#         order (int): The order of the polynomial trend. Default is 2 (quadratic).
 
 #     Returns:
-#         pandas.Series: A pandas series representing the polynomial trend of the input series.
-#         array-like: The coefficients of the polynomial trend.
+#         pandas.Series: A pandas series representing the estimated polynomial trend.
+#         np.ndarray: Array of polynomial coefficients in decreasing order.
 #     """
-#     # Use input x-value array if x_estimate is not provided
-#     if x_estimate is None:
-#         x_estimate = x
+#     # Ensure input is a Pandas Series
+#     if not isinstance(series, pd.Series):
+#         raise ValueError("Input must be a pandas Series.")
 
-#     # Create mask for finite values
-#     is_finite = np.isfinite(y)
+#     # Get x values (time index as numerical values)
+#     x = np.arange(series.size)
 
-#     # Prepare data for model fitting
-#     X = x[is_finite].reshape(-1, 1)
-#     y_finite = y[is_finite]
+#     # Mask missing values
+#     isfinite = np.isfinite(series.values).flatten()
+#     X = x[isfinite].reshape(-1, 1)
+#     y = series.values[isfinite]
 
-#     # Try fitting the polynomial model using RANSAC
-#     try:
-#         polynomial_model = make_pipeline(
-#             PolynomialFeatures(order), RANSACRegressor(random_state=42)
-#         )
-#         polynomial_model.fit(X, y_finite)
-#         # If successful, retrieve coefficients from RANSAC
-#         coefficients = polynomial_model.named_steps["ransacregressor"].estimator_.coef_
-#         # print("RANSACRegressor succeeded.")
+#     # Transform features to polynomial terms
+#     poly = PolynomialFeatures(degree=order)
+#     X_poly = poly.fit_transform(X)
+
+#     # Fit polynomial regression model
+#     model = LinearRegression(fit_intercept=False)  # Intercept is handled by poly transformation
+#     model.fit(X_poly, y)
+
+#     # Generate trend using the fitted model
+#     full_X_poly = poly.transform(x.reshape(-1, 1))
+#     trend_values = model.predict(full_X_poly)
+
+#     # Create a pandas series with trend values
+#     trend_series = pd.Series(trend_values, index=series.index)
+
+#     return trend_series, model.coef_
+
+def get_polynomial_trend(x, y, order, x_estimate=None):
+    """
+    Returns the polynomial trend of the given x and y arrays. 
+    First tries RANSACRegressor, and if it fails, falls back on LinearRegression.
+
+    Parameters:
+        x (array-like): The x-value array.
+        y (array-like): The y-value array with potential missing values.
+        order (int): The order of polynomial fitting.
+        x_estimate (array-like, optional): The x-value array for estimating the y-value array.
+                                           If None, the input x-value array is used.
+
+    Returns:
+        pandas.Series: A pandas series representing the polynomial trend of the input series.
+        array-like: The coefficients of the polynomial trend.
+    """
+    # Use input x-value array if x_estimate is not provided
+    if x_estimate is None:
+        x_estimate = x
+
+    # Create mask for finite values
+    is_finite = np.isfinite(y)
+
+    # Prepare data for model fitting
+    X = x[is_finite].reshape(-1, 1)
+    y_finite = y[is_finite]
+
+    # Try fitting the polynomial model using RANSAC
+    try:
+        polynomial_model = make_pipeline(
+            PolynomialFeatures(order), RANSACRegressor(random_state=42)
+        )
+        polynomial_model.fit(X, y_finite)
+        # If successful, retrieve coefficients from RANSAC
+        coefficients = polynomial_model.named_steps["ransacregressor"].estimator_.coef_
+        # print("RANSACRegressor succeeded.")
     
-#     except Exception as e:
-#         # print(f"RANSAC failed: {e}. Falling back to LinearRegression.")
+    except Exception as e:
+        # print(f"RANSAC failed: {e}. Falling back to LinearRegression.")
         
-#         # If RANSAC fails, fallback to LinearRegression
-#         polynomial_model = make_pipeline(
-#             PolynomialFeatures(order), LinearRegression()
-#         )
-#         polynomial_model.fit(X, y_finite)
-#         # Retrieve coefficients from LinearRegression
-#         coefficients = polynomial_model.named_steps["linearregression"].coef_
+        # If RANSAC fails, fallback to LinearRegression
+        polynomial_model = make_pipeline(
+            PolynomialFeatures(order), LinearRegression()
+        )
+        polynomial_model.fit(X, y_finite)
+        # Retrieve coefficients from LinearRegression
+        coefficients = polynomial_model.named_steps["linearregression"].coef_
 
-#     # Predict values using the fitted model
-#     X_estimate = x_estimate.reshape(-1, 1)
-#     y_estimate = polynomial_model.predict(X_estimate)
+    # Predict values using the fitted model
+    X_estimate = x_estimate.reshape(-1, 1)
+    y_estimate = polynomial_model.predict(X_estimate)
 
-#     # Create a pandas series from the predicted values
-#     trend_series = pd.Series(y_estimate, index=x_estimate.flatten())
+    # Create a pandas series from the predicted values
+    trend_series = pd.Series(y_estimate, index=x_estimate.flatten())
 
-#     return trend_series, coefficients
+    return trend_series, coefficients
 
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-
 def find_seasonality(time_series_data, target_column=None, interval=1):
     """
-    Analyze seasonality in a time series data using Fourier Transform.
+    Analyze seasonality in time series using Fourier Transform.
 
     Parameters:
-    time_series_data : pandas.DataFrame or pandas.Series
-        DataFrame or Series containing the time series data.
+    -----------
+    time_series_data : pd.DataFrame or pd.Series
+        Time series with datetime index
     target_column : str, optional
-        The name of the column to analyze if a DataFrame is provided. Not needed if a Series is provided.
-    interval : int, optional
-        The time interval between observations (default is 1).
+        Column name if DataFrame provided
+    interval : float, optional
+        Time interval in days (auto-detected if 1)
 
     Returns:
-    seasonal_summary : pandas.DataFrame
-        A DataFrame containing amplitudes, frequencies, phases, and periods.
+    --------
+    pd.DataFrame
+        Sorted by amplitude with frequency, phase, and period info
     """
-    # Ensure the input data is a pandas DataFrame or Series
+    import pandas as pd
+    import numpy as np
+    from scipy.fft import fft, fftfreq
+    import warnings
+    
+    # Validate input type
     if not isinstance(time_series_data, (pd.DataFrame, pd.Series)):
-        raise ValueError("The input data must be a pandas DataFrame or Series.")
-
-    # Ensure the index is of datetime type
+        raise ValueError("Input must be pandas DataFrame or Series")
+    
+    # Validate datetime index
     if not pd.api.types.is_datetime64_any_dtype(time_series_data.index):
-        raise ValueError(
-            "The index of the input data must be of datetime type."
-        )
-
-    # If input is a Series, convert it to a DataFrame
+        raise ValueError("Index must be datetime type")
+    
+    # Auto-detect interval from datetime index
+    if interval == 1:
+        time_diffs = time_series_data.index.to_series().diff().dropna()
+        median_diff = time_diffs.median()
+        std_dev = time_diffs.std()
+        
+        # Check regularity
+        if std_dev > median_diff * 0.1:
+            warnings.warn(
+                f"Irregular sampling detected (std/median={std_dev/median_diff:.2%}). "
+                "FFT assumes regular intervals - results may be unreliable."
+            )
+        
+        interval = median_diff.total_seconds() / (24 * 3600)
+    
+    # Convert Series to DataFrame
     if isinstance(time_series_data, pd.Series):
         time_series_data = time_series_data.to_frame(name="value")
         target_column = "value"
-
-    # Check if the target column exists in the DataFrame
+    
+    # Validate column exists
     if target_column not in time_series_data.columns:
-        raise ValueError(f"Column '{target_column}' not found in DataFrame.")
-
-    # Interpolating missing values in the target column
+        raise ValueError(f"Column '{target_column}' not found")
+    
+    # Interpolate missing values
     signal = time_series_data[target_column].interpolate(method="linear")
-
-    # Fourier Transform
+    
+    # Perform FFT
     fourier_transform = fft(signal)
-    n = len(signal) // 2  # Half the length for one-sided spectrum
+    n = len(signal) // 2
     frequencies = fftfreq(len(fourier_transform), d=interval)[:n]
-
-    # Extracting amplitudes and phases for the one-sided spectrum
+    
+    # Extract components
     amplitudes = np.abs(fourier_transform)[:n] / n
     phases = np.angle(fourier_transform)[:n]
-    periods_in_days = np.abs(1 / frequencies)
-
-    # Creating a summary table
-    summary_table = (
-        pd.DataFrame(
-            {
-                "Amplitude": amplitudes,
-                "Frequency": frequencies,
-                "Phase": phases,
-                "Period (days)": periods_in_days,
-            }
-        )
-        .sort_values(by="Amplitude", ascending=False)
-        .reset_index(drop=True)
-    )
-
+    periods_in_days = np.where(frequencies != 0, np.abs(1 / frequencies), np.inf)
+    
+    # Create summary table
+    summary_table = pd.DataFrame({
+        "Amplitude": amplitudes,
+        "Frequency": frequencies,
+        "Phase": phases,
+        "Period (days)": periods_in_days,
+    }).sort_values(by="Amplitude", ascending=False).reset_index(drop=True)
+    
     return summary_table
+
+# def find_seasonality(time_series_data, target_column=None, interval=1):
+#     """
+#     Analyze seasonality in a time series data using Fourier Transform.
+
+#     Parameters:
+#     time_series_data : pandas.DataFrame or pandas.Series
+#         DataFrame or Series containing the time series data.
+#     target_column : str, optional
+#         The name of the column to analyze if a DataFrame is provided. Not needed if a Series is provided.
+#     interval : int, optional
+#         The time interval between observations (default is 1).
+
+#     Returns:
+#     seasonal_summary : pandas.DataFrame
+#         A DataFrame containing amplitudes, frequencies, phases, and periods.
+#     """
+#     # Ensure the input data is a pandas DataFrame or Series
+#     if not isinstance(time_series_data, (pd.DataFrame, pd.Series)):
+#         raise ValueError("The input data must be a pandas DataFrame or Series.")
+
+#     # Ensure the index is of datetime type
+#     if not pd.api.types.is_datetime64_any_dtype(time_series_data.index):
+#         raise ValueError(
+#             "The index of the input data must be of datetime type."
+#         )
+
+#     # If input is a Series, convert it to a DataFrame
+#     if isinstance(time_series_data, pd.Series):
+#         time_series_data = time_series_data.to_frame(name="value")
+#         target_column = "value"
+
+#     # Check if the target column exists in the DataFrame
+#     if target_column not in time_series_data.columns:
+#         raise ValueError(f"Column '{target_column}' not found in DataFrame.")
+
+#     # Interpolating missing values in the target column
+#     signal = time_series_data[target_column].interpolate(method="linear")
+
+#     # Fourier Transform
+#     fourier_transform = fft(signal)
+#     n = len(signal) // 2  # Half the length for one-sided spectrum
+#     frequencies = fftfreq(len(fourier_transform), d=interval)[:n]
+
+#     # Extracting amplitudes and phases for the one-sided spectrum
+#     amplitudes = np.abs(fourier_transform)[:n] / n
+#     phases = np.angle(fourier_transform)[:n]
+#     periods_in_days = np.abs(1 / frequencies)
+
+#     # Creating a summary table
+#     summary_table = (
+#         pd.DataFrame(
+#             {
+#                 "Amplitude": amplitudes,
+#                 "Frequency": frequencies,
+#                 "Phase": phases,
+#                 "Period (days)": periods_in_days,
+#             }
+#         )
+#         .sort_values(by="Amplitude", ascending=False)
+#         .reset_index(drop=True)
+#     )
+
+#     return summary_table
 
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
