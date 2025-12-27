@@ -1,24 +1,29 @@
 """
 GPS Jump Correction Module
-Corrects timeseries based on manually selected jump dates.
+Corrects time series based on manually selected jump dates.
 """
+from __future__ import annotations
 
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
+from typing import List, Tuple, Dict, Optional
 
 
-def correct_jumps(timeseries, jump_dates):
+def correct_jumps(
+    timeseries: pd.Series,
+    jump_dates: List[str]
+) -> Tuple[pd.Series, List[float]]:
     """
     Correct jumps using robust median alignment.
     
     Args:
-        timeseries: pd.Series with DatetimeIndex
+        timeseries: Time series with DatetimeIndex
         jump_dates: List of jump date strings (e.g., ['2022-06-17'])
     
     Returns:
-        corrected: Jump-corrected timeseries
+        corrected: Jump-corrected time series
         offsets: List of offsets applied (in meters)
     """
     corrected = timeseries.copy()
@@ -28,8 +33,10 @@ def correct_jumps(timeseries, jump_dates):
     
     # Convert dates to indices
     jump_dates_dt = [pd.to_datetime(d) for d in jump_dates]
-    jump_indices = [timeseries.index.get_loc(date) for date in jump_dates_dt 
-                   if date in timeseries.index]
+    jump_indices = [
+        timeseries.index.get_loc(date) for date in jump_dates_dt 
+        if date in timeseries.index
+    ]
     
     if not jump_indices:
         return corrected, []
@@ -74,8 +81,14 @@ def correct_jumps(timeseries, jump_dates):
     return corrected, offsets
 
 
-def plot_jump_correction(original, corrected, jump_dates, offsets, save_path):
-    """Plot original vs corrected."""
+def plot_jump_correction(
+    original: pd.Series,
+    corrected: pd.Series,
+    jump_dates: List[str],
+    offsets: List[float],
+    save_path: Path
+) -> None:
+    """Plot original vs corrected time series."""
     fig, axes = plt.subplots(2, 1, figsize=(16, 10), sharex=True)
     
     jump_dates_dt = [pd.to_datetime(d) for d in jump_dates]
@@ -100,27 +113,43 @@ def plot_jump_correction(original, corrected, jump_dates, offsets, save_path):
     plt.close()
 
 
-def run_jump_correction(timeseries, station_name, jump_dates, output_dir='02_jump_corrected', savefig=False):
+def run_jump_correction(
+    timeseries: pd.Series,
+    station_name: str,
+    jump_dates: List[str],
+    output_dir: str = '02_jump_corrected',
+    savefig: bool = False,
+    verbose: bool = True
+) -> pd.Series:
     """
     Correct jumps and save results.
     
+    Args:
+        timeseries: Time series with DatetimeIndex
+        station_name: Station identifier
+        jump_dates: List of jump dates to correct
+        output_dir: Output directory
+        savefig: Save diagnostic plot
+        verbose: Print progress messages
+    
     Returns:
-        corrected: Jump-corrected timeseries
+        corrected: Jump-corrected time series
     """
     output_path = Path(output_dir)
     output_path.mkdir(exist_ok=True, parents=True)
     
-    print(f"\n{'='*60}")
-    print(f"JUMP CORRECTION: {station_name}")
-    print(f"{'='*60}")
+    if verbose:
+        print(f"\n{'='*60}")
+        print(f"JUMP CORRECTION: {station_name}")
+        print(f"{'='*60}")
     
     # Correct jumps
     corrected, offsets = correct_jumps(timeseries, jump_dates)
     
-    # Print results
-    print(f"Jumps: {len(jump_dates)}")
-    for i, (date, offset) in enumerate(zip(jump_dates, offsets[1:]), 1):
-        print(f"  {i}. {date}: {offset*1000:.1f} mm")
+    if verbose:
+        print(f"Jumps: {len(jump_dates)}")
+        for i, (date, offset) in enumerate(zip(jump_dates, offsets[1:]), 1):
+            print(f"  {i}. {date}: {offset*1000:.1f} mm")
     
     # Save
     csv_path = output_path / f"{station_name}_corrected.csv"
@@ -130,9 +159,71 @@ def run_jump_correction(timeseries, station_name, jump_dates, output_dir='02_jum
         plot_path = output_path / f"{station_name}_correction.png"
         plot_jump_correction(timeseries, corrected, jump_dates, offsets, plot_path)
     
-    print(f"\nOutputs:")
-    print(f"  {csv_path}")
-    if savefig:
-        print(f"  {plot_path}")
+    if verbose:
+        print(f"\nOutputs:")
+        print(f"  {csv_path}")
+        if savefig:
+            print(f"  {plot_path}")
     
     return corrected
+
+
+def batch_jump_correction(
+    data_dict: Dict[str, pd.Series],
+    jumps_dict: Dict[str, List[str]],
+    output_dir: str = '02_jump_corrected',
+    savefig: bool = False,
+    verbose: bool = False
+) -> Dict[str, pd.Series]:
+    """
+    Process multiple stations in batch mode.
+    
+    Args:
+        data_dict: Dictionary mapping station names to time series
+        jumps_dict: Dictionary mapping station names to jump dates
+        output_dir: Output directory
+        savefig: Save diagnostic plots
+        verbose: Print detailed progress
+    
+    Returns:
+        Dictionary of corrected time series keyed by station name
+    """
+    corrected_all = {}
+    n_total = len(data_dict)
+    
+    print(f"\nCorrecting jumps for {n_total} stations...")
+    print(f"Output directory: {output_dir}")
+    print("-" * 60)
+    
+    for i, (station_name, timeseries) in enumerate(data_dict.items(), 1):
+        try:
+            jump_dates = jumps_dict.get(station_name, [])
+            
+            corrected = run_jump_correction(
+                timeseries=timeseries,
+                station_name=station_name,
+                jump_dates=jump_dates,
+                output_dir=output_dir,
+                savefig=savefig,
+                verbose=verbose
+            )
+            corrected_all[station_name] = corrected
+            
+            # Progress indicator
+            if not verbose:
+                status = f"[{i}/{n_total}] {station_name}: {len(jump_dates)} jumps corrected"
+                print(status)
+                
+        except Exception as e:
+            print(f"[{i}/{n_total}] {station_name}: ERROR - {str(e)}")
+            corrected_all[station_name] = timeseries  # Return original on error
+    
+    # Summary
+    print("-" * 60)
+    total_jumps = sum(len(jumps_dict.get(stn, [])) for stn in data_dict.keys())
+    print(f"\nBatch Summary:")
+    print(f"  Processed: {len(corrected_all)}/{n_total} stations")
+    print(f"  Total jumps corrected: {total_jumps}")
+    print(f"\nResults saved to: {output_dir}")
+    
+    return corrected_all

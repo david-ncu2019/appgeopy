@@ -1,7 +1,8 @@
 """
 GPS Jump Detection Module
-Automatically detects potential jumps and saves results for manual review.
+Automatically detects potential jumps with batch processing support.
 """
+from __future__ import annotations
 
 import pandas as pd
 import numpy as np
@@ -9,12 +10,16 @@ import matplotlib.pyplot as plt
 import ruptures as rpt
 import json
 from pathlib import Path
+from typing import List, Dict, Tuple, Optional
 import warnings
 warnings.filterwarnings('ignore')
 
 
-def detect_data_gaps(timeseries, gap_threshold_days=30):
-    """Identify large data gaps."""
+def detect_data_gaps(
+    timeseries: pd.Series, 
+    gap_threshold_days: int = 30
+) -> List[Dict[str, any]]:
+    """Identify large data gaps between valid measurements."""
     valid_indices = timeseries.dropna().index
     
     gaps = []
@@ -30,20 +35,25 @@ def detect_data_gaps(timeseries, gap_threshold_days=30):
     return gaps
 
 
-def detect_jumps_smart(timeseries, penalty=20, min_segment_days=90, gap_threshold_days=60):
+def detect_jumps_smart(
+    timeseries: pd.Series,
+    penalty: int = 20,
+    min_segment_days: int = 90,
+    gap_threshold_days: int = 60
+) -> Tuple[List[pd.Timestamp], List[str], List[Dict]]:
     """
     Smart jump detection that filters out gap boundaries.
     
     Args:
-        timeseries: pd.Series with DatetimeIndex
+        timeseries: Time series with DatetimeIndex
         penalty: Ruptures penalty (15-30, higher = fewer jumps)
         min_segment_days: Minimum days between jumps
         gap_threshold_days: Gap threshold for filtering
     
     Returns:
-        jump_dates: List of detected jump dates
-        jump_types: List of jump types ('equipment_change' or 'gap_boundary')
-        gaps: List of data gaps
+        jump_dates: Detected jump timestamps
+        jump_types: Jump classifications
+        gaps: Data gap records
     """
     valid_data = timeseries.dropna()
     
@@ -51,24 +61,33 @@ def detect_jumps_smart(timeseries, penalty=20, min_segment_days=90, gap_threshol
         return [], [], []
     
     try:
-        # Downsample for speed if large dataset
+        # Downsample for large datasets
         if len(valid_data) > 2000:
             downsample_factor = len(valid_data) // 2000
             downsampled_values = valid_data.iloc[::downsample_factor].values
             downsampled_index = valid_data.index[::downsample_factor]
             
             signal_data = downsampled_values.reshape(-1, 1)
-            algo = rpt.Pelt(model='rbf', min_size=min_segment_days//downsample_factor, jump=1).fit(signal_data)
+            algo = rpt.Pelt(
+                model='rbf',
+                min_size=min_segment_days // downsample_factor,
+                jump=1
+            ).fit(signal_data)
             changepoints_down = algo.predict(pen=penalty)
             
-            jump_dates_candidates = [downsampled_index[cp - 1] for cp in changepoints_down[:-1]]
+            jump_dates_candidates = [
+                downsampled_index[cp - 1] for cp in changepoints_down[:-1]
+            ]
             
             # Refine in ±30 day window
             jump_dates_refined = []
             for approx_date in jump_dates_candidates:
                 window_start = approx_date - pd.Timedelta(days=30)
                 window_end = approx_date + pd.Timedelta(days=30)
-                window_data = valid_data[(valid_data.index >= window_start) & (valid_data.index <= window_end)]
+                window_data = valid_data[
+                    (valid_data.index >= window_start) & 
+                    (valid_data.index <= window_end)
+                ]
                 
                 if len(window_data) > 20:
                     diffs = np.abs(np.diff(window_data.values))
@@ -80,7 +99,11 @@ def detect_jumps_smart(timeseries, penalty=20, min_segment_days=90, gap_threshol
         else:
             # Small dataset
             signal_data = valid_data.values.reshape(-1, 1)
-            algo = rpt.Pelt(model='rbf', min_size=min_segment_days, jump=1).fit(signal_data)
+            algo = rpt.Pelt(
+                model='rbf',
+                min_size=min_segment_days,
+                jump=1
+            ).fit(signal_data)
             changepoints = algo.predict(pen=penalty)
             
             jump_indices_in_valid = [cp - 1 for cp in changepoints[:-1]]
@@ -112,20 +135,20 @@ def detect_jumps_smart(timeseries, penalty=20, min_segment_days=90, gap_threshol
         return jump_dates_filtered, jump_types, gaps
         
     except Exception as e:
-        print(f"Detection error: {e}")
+        if __debug__:
+            print(f"Detection error: {e}")
         return [], [], []
 
 
-def plot_jump_detection(timeseries, jump_dates, jump_types, gaps, save_path):
-    """
-    Create diagnostic plot for jump detection.
-    
-    Shows:
-    - Original data
-    - Detected jumps (color-coded by type) with DATE LABELS
-    - Data gaps (shaded regions)
-    """
-    fig, ax = plt.subplots(figsize=(16, 8)) # Increased height slightly to accommodate labels
+def plot_jump_detection(
+    timeseries: pd.Series,
+    jump_dates: List[pd.Timestamp],
+    jump_types: List[str],
+    gaps: List[Dict],
+    save_path: Path
+) -> None:
+    """Create diagnostic plot for jump detection."""
+    fig, ax = plt.subplots(figsize=(16, 8))
     
     # Plot data
     ax.plot(timeseries, 'o', ms=2, alpha=0.5, color='steelblue', label='Data')
@@ -140,30 +163,18 @@ def plot_jump_detection(timeseries, jump_dates, jump_types, gaps, save_path):
     equipment_jumps = [jd for jd, jt in zip(jump_dates, jump_types) if jt == 'equipment_change']
     gap_jumps = [jd for jd, jt in zip(jump_dates, jump_types) if jt == 'gap_boundary']
     
-    # Get the transform that maps x data coordinates and y axes coordinates (0 to 1)
-    # This allows us to place text at a specific date, but always at the top of the chart
     trans = ax.get_xaxis_transform()
     
-    # Plot Equipment Jumps (Red) WITH LABELS
+    # Plot equipment jumps with labels
     for jd in equipment_jumps:
-        # Draw the line
         ax.axvline(jd, color='red', ls='--', lw=2.5, alpha=0.8, label='_nolegend_')
-        
-        # Add the date text
         ax.text(
-            x=jd,                   # X position: The date of the jump
-            y=1.01,                 # Y position: 1.01 means slightly above the top axis
-            s=jd.strftime('%Y-%m-%d'), # The text string (Year-Month-Day)
-            transform=trans,        # Use the hybrid coordinate system
-            color='red',            # Match the line color
-            rotation=45,            # Rotate to avoid overlap
-            ha='left',              # Align left so it flows away from the line
-            va='bottom',            # Align bottom so it sits on top of the graph
-            fontsize=10,
-            fontweight='bold'
+            x=jd, y=1.01, s=jd.strftime('%Y-%m-%d'),
+            transform=trans, color='red', rotation=45,
+            ha='left', va='bottom', fontsize=10, fontweight='bold'
         )
     
-    # Plot Gap Jumps (Orange) - usually we don't label these to avoid clutter
+    # Plot gap jumps
     for jd in gap_jumps:
         ax.axvline(jd, color='orange', ls=':', lw=2, alpha=0.6, label='_nolegend_')
     
@@ -179,33 +190,51 @@ def plot_jump_detection(timeseries, jump_dates, jump_types, gaps, save_path):
     
     ax.set_ylabel('Displacement (m)', fontsize=12, fontweight='bold')
     ax.set_xlabel('Date', fontsize=12, fontweight='bold')
-    # ax.set_title('Jump Detection Results - REVIEW CAREFULLY', fontsize=14, fontweight='bold', pad=20) # Added pad for title
     ax.grid(True, alpha=0.3)
     
     plt.tight_layout()
-    # bbox_inches='tight' is crucial here to ensure the external text isn't cut off
-    plt.savefig(save_path, dpi=150, bbox_inches='tight') 
+    plt.savefig(save_path, dpi=150, bbox_inches='tight')
     plt.close()
 
 
-def run_jump_detection(timeseries, station_name, output_dir='01_jump_detection', 
-                       penalty=20, min_segment_days=90, gap_threshold_days=60, savefig=False):
+def run_jump_detection(
+    timeseries: pd.Series,
+    station_name: str,
+    output_dir: str = '01_jump_detection',
+    penalty: int = 20,
+    min_segment_days: int = 90,
+    gap_threshold_days: int = 60,
+    savefig: bool = False,
+    verbose: bool = True
+) -> Dict:
     """
-    Run jump detection and save results for manual review.
+    Run jump detection and save results.
+    
+    Args:
+        timeseries: Time series with DatetimeIndex
+        station_name: Station identifier
+        output_dir: Output directory
+        penalty: Ruptures penalty parameter
+        min_segment_days: Minimum days between jumps
+        gap_threshold_days: Gap detection threshold
+        savefig: Save diagnostic plot
+        verbose: Print progress messages
     
     Returns:
-        dict: Detection results including suggested jumps
+        Detection results dictionary
     """
     output_path = Path(output_dir)
     output_path.mkdir(exist_ok=True, parents=True)
     
-    print(f"\n{'='*60}")
-    print(f"JUMP DETECTION: {station_name}")
-    print(f"{'='*60}")
+    if verbose:
+        print(f"\n{'='*60}")
+        print(f"JUMP DETECTION: {station_name}")
+        print(f"{'='*60}")
     
     # Detect jumps
     jump_dates, jump_types, gaps = detect_jumps_smart(
-        timeseries, penalty=penalty,
+        timeseries,
+        penalty=penalty,
         min_segment_days=min_segment_days,
         gap_threshold_days=gap_threshold_days
     )
@@ -235,25 +264,107 @@ def run_jump_detection(timeseries, station_name, output_dir='01_jump_detection',
         json.dump(results, f, indent=2)
     
     if savefig:
-        # Save plot
         plot_path = output_path / f"{station_name}_detection.png"
         plot_jump_detection(timeseries, jump_dates, jump_types, gaps, plot_path)
     
-    # Print summary
-    equipment_jumps = [j for j in results['detected_jumps'] if j['type'] == 'equipment_change']
-    
-    print(f"Data gaps: {len(gaps)}")
-    print(f"Detected jumps: {len(jump_dates)}")
-    
-    if equipment_jumps:
-        print(f"\nLikely REAL jumps:")
-        for j in equipment_jumps:
-            print(f"  - {j['date']}")
-    
-    print(f"\nOutputs:")
-    print(f"  {json_path}")
-    if savefig:
-        print(f"  {plot_path}")
-    print(f"\n→ Review and select real jumps for next step")
+    if verbose:
+        equipment_jumps = [
+            j for j in results['detected_jumps'] 
+            if j['type'] == 'equipment_change'
+        ]
+        
+        print(f"Data gaps: {len(gaps)}")
+        print(f"Detected jumps: {len(jump_dates)}")
+        
+        if equipment_jumps:
+            print(f"\nLikely REAL jumps:")
+            for j in equipment_jumps:
+                print(f"  - {j['date']}")
+        
+        print(f"\nOutputs:")
+        print(f"  {json_path}")
+        if savefig:
+            print(f"  {plot_path}")
+        print(f"\n→ Review and select real jumps for next step")
     
     return results
+
+
+def batch_jump_detection(
+    data_dict: Dict[str, pd.Series],
+    output_dir: str = '01_jump_detection',
+    penalty: int = 20,
+    min_segment_days: int = 90,
+    gap_threshold_days: int = 60,
+    savefig: bool = False,
+    verbose: bool = False
+) -> Dict[str, Dict]:
+    """
+    Process multiple stations in batch mode.
+    
+    Args:
+        data_dict: Dictionary mapping station names to time series
+        output_dir: Output directory
+        penalty: Ruptures penalty parameter
+        min_segment_days: Minimum days between jumps
+        gap_threshold_days: Gap detection threshold
+        savefig: Save diagnostic plots
+        verbose: Print detailed progress (not recommended for large batches)
+    
+    Returns:
+        Dictionary of results keyed by station name
+    """
+    results_all = {}
+    n_total = len(data_dict)
+    
+    print(f"\nProcessing {n_total} stations...")
+    print(f"Output directory: {output_dir}")
+    print(f"Parameters: penalty={penalty}, min_segment_days={min_segment_days}, gap_threshold_days={gap_threshold_days}")
+    print("-" * 60)
+    
+    for i, (station_name, timeseries) in enumerate(data_dict.items(), 1):
+        try:
+            results = run_jump_detection(
+                timeseries=timeseries,
+                station_name=station_name,
+                output_dir=output_dir,
+                penalty=penalty,
+                min_segment_days=min_segment_days,
+                gap_threshold_days=gap_threshold_days,
+                savefig=savefig,
+                verbose=verbose
+            )
+            results_all[station_name] = results
+            
+            # Progress indicator
+            if not verbose:
+                n_gaps = len(results['data_gaps'])
+                n_jumps = len(results['detected_jumps'])
+                equipment_jumps = sum(
+                    1 for j in results['detected_jumps'] 
+                    if j['type'] == 'equipment_change'
+                )
+                status = f"[{i}/{n_total}] {station_name}: {n_gaps} gaps, {n_jumps} jumps ({equipment_jumps} equipment)"
+                print(status)
+                
+        except Exception as e:
+            print(f"[{i}/{n_total}] {station_name}: ERROR - {str(e)}")
+            results_all[station_name] = {'error': str(e)}
+    
+    # Summary
+    print("-" * 60)
+    n_success = sum(1 for r in results_all.values() if 'error' not in r)
+    n_failed = n_total - n_success
+    
+    total_equipment_jumps = sum(
+        sum(1 for j in r['detected_jumps'] if j['type'] == 'equipment_change')
+        for r in results_all.values() if 'error' not in r
+    )
+    
+    print(f"\nBatch Summary:")
+    print(f"  Processed: {n_success}/{n_total} stations")
+    print(f"  Failed: {n_failed}")
+    print(f"  Total equipment jumps detected: {total_equipment_jumps}")
+    print(f"\nResults saved to: {output_dir}")
+    
+    return results_all
