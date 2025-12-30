@@ -7,6 +7,7 @@ from __future__ import annotations
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 from pathlib import Path
 from typing import List, Tuple, Dict, Optional
 
@@ -88,28 +89,98 @@ def plot_jump_correction(
     offsets: List[float],
     save_path: Path
 ) -> None:
-    """Plot original vs corrected time series."""
-    fig, axes = plt.subplots(2, 1, figsize=(16, 10), sharex=True)
+    """
+    Publication-quality plot comparing original and jump-corrected time series,
+    annotated with correction magnitudes.
+    """
+    # 1. Global Publication Styling (serif fonts, high DPI)
+    plt.rcParams.update({
+        "font.family": "serif",
+        "font.serif": ["Times New Roman", "DejaVu Serif"],
+        "axes.titlesize": 14,
+        "axes.labelsize": 12,
+        "xtick.labelsize": 10,
+        "ytick.labelsize": 10,
+        "figure.dpi": 300
+    })
+
+    fig, axes = plt.subplots(2, 1, figsize=(8, 5), sharex=True, gridspec_kw={'hspace': 0.1})
     
+    # Convert string dates to datetime objects
     jump_dates_dt = [pd.to_datetime(d) for d in jump_dates]
     
-    # Original
-    axes[0].plot(original, 'o', ms=2, alpha=0.5, color='steelblue')
-    for jd in jump_dates_dt:
-        axes[0].axvline(jd, color='red', ls='--', lw=2.5, alpha=0.8)
-    axes[0].set_ylabel('Displacement (m)', fontsize=11, fontweight='bold')
-    axes[0].set_title('Original Data + Selected Jumps', fontsize=12, fontweight='bold')
-    axes[0].grid(True, alpha=0.3)
+    # Define professional color palette
+    color_orig = '#34495e'  # Dark slate blue/gray
+    color_corr = '#008080'  # Teal/Dark Cyan
+    color_jump = '#c0392b'  # Deep red
     
-    # Corrected
-    axes[1].plot(corrected, 'o', ms=2, alpha=0.5, color='darkgreen')
-    axes[1].set_ylabel('Displacement (m)', fontsize=11, fontweight='bold')
-    axes[1].set_xlabel('Date', fontsize=11, fontweight='bold')
-    axes[1].set_title('Jump-Corrected Data', fontsize=12, fontweight='bold')
-    axes[1].grid(True, alpha=0.3)
+    # --- Subplot 1: Original Data & Jump Events ---
+    ax0 = axes[0]
+    # Use slightly smaller markers and lower alpha for dense data
+    ax0.plot(original.index, original.values, 'o', 
+             ms=2.5, alpha=0.8, color=color_orig, markeredgewidth=0, label='Raw Data')
     
-    plt.tight_layout()
-    plt.savefig(save_path, dpi=150, bbox_inches='tight')
+    # Iterate through dates and offsets simultaneously to annotate
+    # We use enumerate to alternate label heights to avoid crowding
+    for i, (jd, offset) in enumerate(zip(jump_dates_dt, offsets)):
+        # Vertical line for the jump
+        ax0.axvline(jd, color=color_jump, ls='-', lw=1.5, alpha=0.8)
+        
+        # Annotation showing the offset magnitude
+        # Alternate vertical position to prevent overlap
+        y_pos_factor = 1.05 if i % 2 == 0 else 1.12
+        
+        label_text = f"{offset:+.3f} m" # Format with +/- sign and 3 decimals
+        
+        ax0.text(
+            x=jd, y=y_pos_factor, s=label_text,
+            transform=ax0.get_xaxis_transform(), 
+            color=color_jump, fontsize=9, fontweight='bold',
+            ha='center', va='bottom', rotation=0,
+            bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=color_jump, alpha=0.9)
+        )
+
+    ax0.set_ylabel('Displacement (m)', fontweight='bold')
+    # Use a descriptive title, move legend to a clean spot
+    ax0.set_title(r'$\bf{a.}$ Original Time Series with Detected Jumps', loc='left')
+    
+    # Custom legend for top plot
+    legend_elements_0 = [
+        Line2D([0], [0], color=color_orig, marker='o', ls='None', alpha=0.6, label='Raw GPS Data'),
+        Line2D([0], [0], color=color_jump, ls='-', lw=1.5, label='Detected Jump Event'),
+    ]
+    ax0.legend(handles=legend_elements_0, loc='upper left', frameon=True, fontsize=10)
+
+    # --- Subplot 2: Corrected Data ---
+    ax1 = axes[1]
+    ax1.plot(corrected.index, corrected.values, 'o', 
+             ms=2.5, alpha=0.8, color=color_corr, markeredgewidth=0, label='Corrected Data')
+             
+    ax1.set_ylabel('Displacement (m)', fontweight='bold')
+    ax1.set_xlabel('Date', fontweight='bold')
+    ax1.set_title(r'$\bf{b.}$ Jump-Corrected Time Series', loc='left')
+    
+    # Simple legend for bottom plot
+    ax1.legend(loc='upper left', frameon=True, fontsize=10)
+
+    # --- Common Styling Refinements ---
+    for ax in axes:
+        ax.grid(True, linestyle=':', color='gray', alpha=0.5)
+        # Remove top and right spines for a cleaner scientific look
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        # Ensure y-axis limits match so visual comparison is accurate
+        combined_min = min(original.min(), corrected.min())
+        combined_max = max(original.max(), corrected.max())
+        # Add a small buffer (5%)
+        y_range = combined_max - combined_min
+        ax.set_ylim(combined_min - 0.05*y_range, combined_max + 0.05*y_range)
+
+    # Adjust layout to accommodate top labels
+    plt.tight_layout(rect=[0, 0, 1, 0.95])
+    
+    # Save high-resolution output
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
     plt.close()
 
 

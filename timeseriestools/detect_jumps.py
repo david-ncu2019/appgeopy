@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import ruptures as rpt
 import json
 from pathlib import Path
+from matplotlib.lines import Line2D
 from typing import List, Dict, Tuple, Optional
 import warnings
 warnings.filterwarnings('ignore')
@@ -147,53 +148,78 @@ def plot_jump_detection(
     gaps: List[Dict],
     save_path: Path
 ) -> None:
-    """Create diagnostic plot for jump detection."""
-    fig, ax = plt.subplots(figsize=(16, 8))
+    """Enhanced diagnostic plot for publication-quality jump detection."""
     
-    # Plot data
-    ax.plot(timeseries, 'o', ms=2, alpha=0.5, color='steelblue', label='Data')
+    # 1. Global Publication Styling
+    plt.rcParams.update({
+        "font.family": "serif",
+        "font.serif": ["Times New Roman", "DejaVu Serif"],
+        "axes.titlesize": 14,
+        "axes.labelsize": 12,
+        "xtick.labelsize": 10,
+        "ytick.labelsize": 10,
+        "legend.fontsize": 10,
+        "figure.dpi": 300  # High resolution for print
+    })
+
+    fig, ax = plt.subplots(figsize=(8, 5))
     
-    # Plot gaps
-    for gap in gaps:
+    # 2. Data Plotting (Use a darker, professional blue)
+    ax.plot(timeseries.index, timeseries.values, 'o', 
+            ms=3, alpha=0.4, color='#2c3e50', markeredgewidth=0, label='_nolegend_')
+    
+    # 3. Gap Visualization
+    for i, gap in enumerate(gaps):
         gap_start = pd.to_datetime(gap['start'])
         gap_end = pd.to_datetime(gap['end'])
-        ax.axvspan(gap_start, gap_end, alpha=0.2, color='gray', label='_nolegend_')
+        # Only add label to the first gap for the legend
+        label = 'Data Gap' if i == 0 else '_nolegend_'
+        ax.axvspan(gap_start, gap_end, alpha=0.4, color='#bdc3c7', label=label)
     
-    # Filter jumps
+    # 4. Filter and Plot Jumps
     equipment_jumps = [jd for jd, jt in zip(jump_dates, jump_types) if jt == 'equipment_change']
     gap_jumps = [jd for jd, jt in zip(jump_dates, jump_types) if jt == 'gap_boundary']
     
-    trans = ax.get_xaxis_transform()
-    
-    # Plot equipment jumps with labels
+    # Plot Equipment Changes (Bold Primary Signal)
     for jd in equipment_jumps:
-        ax.axvline(jd, color='red', ls='--', lw=2.5, alpha=0.8, label='_nolegend_')
+        ax.axvline(jd, color='#e74c3c', ls='-', lw=1.5, alpha=0.9)
+        # Use a "callout" style text to avoid overlapping the data
         ax.text(
-            x=jd, y=1.01, s=jd.strftime('%Y-%m-%d'),
-            transform=trans, color='red', rotation=45,
-            ha='left', va='bottom', fontsize=10, fontweight='bold'
+            x=jd, y=1.02, s=jd.strftime('%Y-%m'),
+            transform=ax.get_xaxis_transform(), color='#c0392b', 
+            rotation=90, ha='center', va='bottom', 
+            fontsize=9, fontweight='bold',
+            bbox=dict(facecolor='white', alpha=0.7, edgecolor='none', pad=1)
         )
     
-    # Plot gap jumps
+    # Plot Gap Boundaries (Subtle Secondary Signal)
     for jd in gap_jumps:
-        ax.axvline(jd, color='orange', ls=':', lw=2, alpha=0.6, label='_nolegend_')
+        ax.axvline(jd, color='#f39c12', ls='--', lw=1.2, alpha=0.7)
     
-    # Legend
-    from matplotlib.lines import Line2D
+    # 5. Professional Refinements
+    ax.set_ylabel('Displacement (m)', fontweight='bold')
+    ax.set_xlabel('Date', fontweight='bold')
+    ax.grid(True, linestyle=':', alpha=0.6)
+    
+    # Remove top and right spines (Standard Journal Style)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+
+    # 6. Custom Legend Construction
     legend_elements = [
-        Line2D([0], [0], color='steelblue', marker='o', linestyle='None', markersize=5, label='GPS Data'),
-        Line2D([0], [0], color='red', linestyle='--', lw=2.5, label='Likely Equipment Change'),
-        Line2D([0], [0], color='orange', linestyle=':', lw=2, label='Likely Gap Boundary'),
-        plt.Rectangle((0, 0), 1, 1, fc='gray', alpha=0.2, label='Data Gap'),
+        Line2D([0], [0], color='#2c3e50', marker='o', ls='None', ms=5, alpha=0.6, label='GPS Time Series'),
+        Line2D([0], [0], color='#e74c3c', ls='-', lw=2, label='Equipment Change'),
+        Line2D([0], [0], color='#f39c12', ls='--', lw=1.5, label='Gap Boundary'),
+        plt.Rectangle((0, 0), 1, 1, fc='#bdc3c7', alpha=0.3, label='Data Gap'),
     ]
-    ax.legend(handles=legend_elements, loc='best', fontsize=10)
     
-    ax.set_ylabel('Displacement (m)', fontsize=12, fontweight='bold')
-    ax.set_xlabel('Date', fontsize=12, fontweight='bold')
-    ax.grid(True, alpha=0.3)
+    ax.legend(handles=legend_elements, loc='upper left', frameon=True, framealpha=0.9)
     
-    plt.tight_layout()
-    plt.savefig(save_path, dpi=150, bbox_inches='tight')
+    # Use tight_layout but ensure space for the top labels
+    plt.tight_layout(rect=[0, 0, 1, 0.95])
+    
+    # Save as PDF or PNG for high quality
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
     plt.close()
 
 

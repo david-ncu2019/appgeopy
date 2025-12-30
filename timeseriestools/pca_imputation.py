@@ -108,10 +108,20 @@ def _select_components_by_variance(singular_values, threshold=0.9, max_component
     variance_ratio = variance / variance.sum()
     cumulative_variance = np.cumsum(variance_ratio)
 
+    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+    # # First index where cumulative variance >= threshold
+    # k = np.argmax(cumulative_variance >= threshold) + 1
+    # if k == 0:
+    #     k = 1
+    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+
     # First index where cumulative variance >= threshold
-    k = np.argmax(cumulative_variance >= threshold) + 1
-    if k == 0:
-        k = 1
+    exceeded = cumulative_variance >= threshold
+    if not np.any(exceeded):
+        # Threshold not met - use all components
+        k = len(singular_values)
+    else:
+        k = np.argmax(exceeded) + 1
 
     if max_components is not None:
         k = min(k, max_components)
@@ -158,15 +168,33 @@ def _iterative_ssa_solve(
     Returns:
         np.ndarray: The 1D imputed and smoothed series (detrended).
     """
+    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+    # current_series = np.array(time_series, dtype=float)
+    # missing_mask = np.isnan(current_series)
+
+    # # Initialize missing values with 0.0 (safe for detrended data)
+    # if np.all(missing_mask):
+    #     # All values are missing; just return zeros
+    #     return np.zeros_like(current_series)
+
+    # current_series[missing_mask] = 0.0
+    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
     current_series = np.array(time_series, dtype=float)
     missing_mask = np.isnan(current_series)
 
-    # Initialize missing values with 0.0 (safe for detrended data)
     if np.all(missing_mask):
-        # All values are missing; just return zeros
         return np.zeros_like(current_series)
 
+    # Normalize data for numerical stability
+    valid_mask = ~missing_mask
+    data_mean = np.mean(current_series[valid_mask])
+    data_std = np.std(current_series[valid_mask])
+    if data_std < 1e-10:
+        data_std = 1.0
+    
+    current_series = (current_series - data_mean) / data_std
     current_series[missing_mask] = 0.0
+
     prev_series = current_series.copy()
 
     for iteration in range(max_iter):
@@ -177,11 +205,24 @@ def _iterative_ssa_solve(
         X_mean = np.nanmean(X_embedded, axis=0)
         X_centered = X_embedded - X_mean
 
+        # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+        # try:
+        #     U, S, Vt = np.linalg.svd(X_centered, full_matrices=False)
+        # except np.linalg.LinAlgError:
+        #     # Fall back to previous stable series
+        #     return prev_series
+        # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+
         try:
             U, S, Vt = np.linalg.svd(X_centered, full_matrices=False)
-        except np.linalg.LinAlgError:
-            # Fall back to previous stable series
-            return prev_series
+        except np.linalg.LinAlgError as e:
+            if iteration == 0:
+                raise RuntimeError(
+                    "SVD failed on first iteration. Data may be ill-conditioned."
+                ) from e
+            import warnings
+            warnings.warn(f"SVD failed at iteration {iteration}. Returning last stable result.")
+            return prev_series * data_std + data_mean  # Don't forget denormalization
 
         # Choose number of components
         if n_components is None:
@@ -201,6 +242,12 @@ def _iterative_ssa_solve(
         U_r = U[:, :r]
         S_r = S[:r]
         Vt_r = Vt[:r, :]
+
+        # # DEBUG: Print component selection on first iteration
+        # if iteration == 0:
+        #     print(f"  [Debug] Selected {r} components from {len(S)} available")
+        #     print(f"  [Debug] Variance explained: {(S_r**2).sum() / (S**2).sum():.3f}")
+
         X_recon = (U_r @ np.diag(S_r) @ Vt_r) + X_mean
 
         # Diagonal averaging back to 1D
@@ -223,7 +270,9 @@ def _iterative_ssa_solve(
 
         prev_series = current_series.copy()
 
-    return current_series
+    # return current_series
+    # Denormalize before returning
+    return current_series * data_std + data_mean
 
 
 ##########################################################################
@@ -247,11 +296,31 @@ def suggest_parameters(time_series):
     if n_total < 4:
         return max(2, n_total // 2)
 
-    # Fill NaNs for FFT estimation
+    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+    # # Fill NaNs for FFT estimation
+    # if np.all(np.isnan(y_temp)):
+    #     # All missing; just choose small window
+    #     return max(2, n_total // 2)
+    # y_temp[np.isnan(y_temp)] = np.nanmean(y_temp)
+    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+
+    # Check missingness ratio
+    missing_ratio = np.isnan(y_temp).mean()
+    if missing_ratio > 0.5:
+        return max(2, min(n_total // 4, 20))
+    
     if np.all(np.isnan(y_temp)):
-        # All missing; just choose small window
         return max(2, n_total // 2)
-    y_temp[np.isnan(y_temp)] = np.nanmean(y_temp)
+    
+    # Interpolate NaNs instead of mean-filling
+    valid_mask = ~np.isnan(y_temp)
+    valid_indices = np.where(valid_mask)[0]
+
+    # Before interpolation (after line 307)
+    if len(valid_indices) < 2:
+        return max(2, n_total // 4)
+
+    y_temp = np.interp(np.arange(n_total), valid_indices, y_temp[valid_mask])
 
     # Linear detrend for FFT
     x = np.arange(n_total)
@@ -277,14 +346,26 @@ def suggest_parameters(time_series):
     peak_indices = np.argsort(magnitudes)[-3:]
     slowest_freq = np.min(xf[1:][peak_indices])
 
-    if slowest_freq <= 1e-6:
+    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    # if slowest_freq <= 1e-6:
+    #     dominant_period = n_total / 4.0
+    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    nyquist = 0.5
+    if slowest_freq <= nyquist / n_total:  # Less than one cycle
         dominant_period = n_total / 4.0
     else:
         dominant_period = 1.0 / slowest_freq
 
-    # Window: ~1.5x dominant period or 1/4 of length, but capped at N/2.1
+    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+    # # Window: ~1.5x dominant period or 1/4 of length, but capped at N/2.1
+    # suggested = int(max(dominant_period * 1.5, n_total / 4.0))
+    # suggested = min(suggested, int(n_total / 2.1))
+    # suggested = max(2, min(suggested, n_total - 1))
+    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+
     suggested = int(max(dominant_period * 1.5, n_total / 4.0))
-    suggested = min(suggested, int(n_total / 2.1))
+    suggested = min(suggested, int(n_total / 3.0))  # Changed from 2.1
+    suggested = min(suggested, 100)  # Hard cap at 100
     suggested = max(2, min(suggested, n_total - 1))
 
     return suggested
@@ -335,6 +416,170 @@ def _reconstruct_output(imputed_values, original_index):
 # SECTION 3: PUBLIC-FACING API
 ##########################################################################
 
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+def auto_tune_embedding_dim(time_series, candidate_multipliers=[0.5, 1.0, 1.5, 2.0]):
+    """Try multiple embedding dimensions, pick best via cross-validation."""
+    if isinstance(time_series, pd.Series):
+        time_series = time_series.values
+    
+    base_dim = suggest_parameters(time_series)
+    candidates = [max(2, int(base_dim * m)) for m in candidate_multipliers]
+    
+    best_score = -np.inf
+    best_dim = base_dim
+    
+    # Detrend first
+    n = len(time_series)
+    t = np.arange(n)
+    valid_mask = ~np.isnan(time_series)
+    if np.sum(valid_mask) >= 2:
+        try:
+            coeffs = np.polyfit(t[valid_mask], time_series[valid_mask], 1)
+            trend = np.polyval(coeffs, t)
+            detrended = time_series - trend
+        except:
+            detrended = time_series - np.nanmean(time_series[valid_mask])
+    else:
+        detrended = time_series
+        trend = np.zeros(n)
+    
+    for dim in candidates:
+        valid = ~np.isnan(detrended)
+        if valid.sum() < 10:
+            continue
+        
+        n_mask = int(valid.sum() * 0.1)
+        mask_idx = np.random.choice(np.where(valid)[0], n_mask, replace=False)
+        
+        test_series = detrended.copy()
+        true_vals = test_series[mask_idx].copy()
+        test_series[mask_idx] = np.nan
+        
+        try:
+            # Call internal function directly
+            imputed_detrended = _iterative_ssa_solve(
+                test_series,
+                embedding_dim=dim,
+                variance_threshold=0.9,
+                max_iter=30,
+                smooth_observed=False
+            )
+            imputed = imputed_detrended + trend
+            score = -np.sqrt(np.mean((imputed[mask_idx] - (true_vals + trend[mask_idx]))**2))
+            if score > best_score:
+                best_score = score
+                best_dim = dim
+        except:
+            continue
+    
+    return best_dim
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+def optimize_ssa_parameters(
+    time_series,
+    embedding_dim_range=None,
+    n_components_range=None,
+    n_folds=5,
+    metric='rmse'
+):
+    """
+    Find optimal parameters via k-fold cross-validation.
+    
+    Args:
+        time_series: Input series (pd.Series or np.ndarray)
+        embedding_dim_range: List of embedding dims to test (default: auto-generated)
+        n_components_range: List of n_components to test (default: [2,3,4,5,6,8,10])
+        n_folds: Number of CV folds
+        metric: 'rmse' or 'mae'
+    
+    Returns:
+        dict: {'embedding_dim': best, 'n_components': best, 'cv_score': score}
+    """
+    if isinstance(time_series, pd.Series):
+        ts_values = time_series.values
+    else:
+        ts_values = np.array(time_series).flatten()
+    
+    # Default ranges
+    if embedding_dim_range is None:
+        base = suggest_parameters(ts_values)
+        embedding_dim_range = [
+            max(2, int(base * 0.5)),
+            base,
+            max(2, int(base * 1.5))
+        ]
+    
+    if n_components_range is None:
+        n_components_range = [2, 3, 4, 5, 6, 8, 10]
+    
+    # Detrend once
+    n = len(ts_values)
+    t = np.arange(n)
+    valid_mask = ~np.isnan(ts_values)
+    
+    if np.sum(valid_mask) >= 2:
+        coeffs = np.polyfit(t[valid_mask], ts_values[valid_mask], 1)
+        trend = np.polyval(coeffs, t)
+        detrended = ts_values - trend
+    else:
+        detrended = ts_values
+        trend = np.zeros(n)
+    
+    # Grid search
+    best_score = np.inf
+    best_params = {}
+    
+    for emb_dim in embedding_dim_range:
+        for n_comp in n_components_range:
+            scores = []
+            
+            # K-fold CV
+            valid_idx = np.where(~np.isnan(detrended))[0]
+            fold_size = len(valid_idx) // n_folds
+            
+            for fold in range(n_folds):
+                # Split
+                test_start = fold * fold_size
+                test_end = test_start + fold_size if fold < n_folds - 1 else len(valid_idx)
+                test_idx = valid_idx[test_start:test_end]
+                
+                # Mask test data
+                train_series = detrended.copy()
+                true_vals = train_series[test_idx].copy()
+                train_series[test_idx] = np.nan
+                
+                try:
+                    # Impute
+                    imputed = _iterative_ssa_solve(
+                        train_series,
+                        embedding_dim=emb_dim,
+                        n_components=n_comp,
+                        max_iter=30,
+                        smooth_observed=False
+                    )
+                    
+                    # Score
+                    if metric == 'rmse':
+                        score = np.sqrt(np.mean((imputed[test_idx] - true_vals)**2))
+                    else:
+                        score = np.mean(np.abs(imputed[test_idx] - true_vals))
+                    scores.append(score)
+                except:
+                    scores.append(np.inf)
+            
+            avg_score = np.mean(scores)
+            if avg_score < best_score:
+                best_score = avg_score
+                best_params = {
+                    'embedding_dim': emb_dim,
+                    'n_components': n_comp,
+                    'cv_score': avg_score
+                }
+    
+    return best_params
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+
 
 def impute_ssa(
     data,
@@ -376,11 +621,20 @@ def impute_ssa(
     Returns:
         pd.Series or np.ndarray: Imputed and smoothed time series.
     """
+
     # 1. Prepare data
     series_values, original_index = _handle_input_data(
         data, time_col=time_col, value_col=value_col
     )
     n = len(series_values)
+    # Check if data has too much missingness
+    missing_ratio = np.isnan(series_values).mean()
+    if missing_ratio > 0.7:
+        raise ValueError(
+            f"Data has {missing_ratio*100:.1f}% missing values. "
+            f"SSA requires <70% missingness for reliable results."
+        )
+
     t = np.arange(n)
 
     # 2. Detrend (linear)

@@ -11,16 +11,13 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import mean_squared_error, r2_score
 
-# Import SSA functions - handle both relative and absolute imports
+# Import SSA functions
 try:
-    from .pca_imputation import impute_ssa, suggest_parameters
+    from pca_imputation import impute_ssa, suggest_parameters
 except ImportError:
-    try:
-        from pca_imputation import impute_ssa, suggest_parameters
-    except ImportError:
-        print("Error: Could not import from 'pca_imputation.py'.")
-        print("Please ensure the file is in the same directory.")
-        raise
+    print("Error: Could not import from 'pca_imputation.py'.")
+    print("Please ensure the file is in the same directory.")
+    raise
 
 
 def _calculate_imputation_metrics(original_values, imputed_values):
@@ -78,7 +75,14 @@ def validate_imputation_stability(
     if n_to_mask == 0:
         return {"rmse": 0, "mae": 0, "r2": 1}, [], [], []
 
+    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+    # mask_indices = np.random.choice(valid_indices, size=n_to_mask, replace=False)
+    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+    # Ensure we mask at least 5% for meaningful validation
+    n_to_mask = max(n_to_mask, int(len(valid_indices) * 0.05))
+    n_to_mask = min(n_to_mask, len(valid_indices))
     mask_indices = np.random.choice(valid_indices, size=n_to_mask, replace=False)
+
     masked_series = series_values.copy()
     masked_series[mask_indices] = np.nan
 
@@ -119,10 +123,14 @@ def run_ssa_smoothing_workflow(
     data,
     time_col=None,
     value_col=None,
+    embedding_dim=None,  # ADD THIS
     fixed_n_components=None,
     variance_threshold=0.9,
     max_components=None,
-    smooth_observed=True,  # NEW: Enable full smoothing by default
+    max_iter=50,  # ADD THIS
+    tol=1e-5,  # ADD THIS
+    smooth_observed=True,
+    verbose=True,  # ADD THIS
 ):
     """
     Execute SSA smoothing & imputation workflow.
@@ -156,46 +164,135 @@ def run_ssa_smoothing_workflow(
     else:
         series_values = np.array(data).flatten()
 
-    # 2. Auto-tune embedding dimension
-    try:
-        best_embedding_dim = suggest_parameters(series_values)
-        print(f"Auto-tuned embedding_dim (L): {best_embedding_dim}")
-    except Exception as e:
-        print(f"Warning: Failed to auto-tune embedding_dim. Falling back. Error: {e}")
-        best_embedding_dim = max(2, len(series_values) // 10)
-        print(f"Fallback embedding_dim (L): {best_embedding_dim}")
+    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+    # # 2. Auto-tune embedding dimension
+    # try:
+    #     best_embedding_dim = suggest_parameters(series_values)
+    #     print(f"Auto-tuned embedding_dim (L): {best_embedding_dim}")
+    # except Exception as e:
+    #     print(f"Warning: Failed to auto-tune embedding_dim. Falling back. Error: {e}")
+    #     best_embedding_dim = max(2, len(series_values) // 10)
+    #     print(f"Fallback embedding_dim (L): {best_embedding_dim}")
+    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 
-    # 3. Decide on component selection mode
-    if fixed_n_components is not None:
-        # Explicit low-rank smoothing
-        chosen_n_components = int(fixed_n_components)
-        chosen_variance_threshold = variance_threshold  # still used if r is large
-        chosen_max_components = max_components
-        print(f"Using fixed_n_components={chosen_n_components}")
+    # 2. Optimize or auto-tune parameters
+    if embedding_dim is None and fixed_n_components is None:
+        # Statistical optimization via cross-validation
+        if verbose:
+            print("Running parameter optimization via CV...")
+        from pca_imputation import optimize_ssa_parameters
+        
+        optimal = optimize_ssa_parameters(
+            series_values,
+            n_folds=5,
+            metric='rmse'
+        )
+        
+        best_embedding_dim = optimal['embedding_dim']
+        chosen_n_components = optimal['n_components']
+        
+        if verbose:
+            print(f"Optimized: embedding_dim={best_embedding_dim}, "
+                  f"n_components={chosen_n_components}, CV_RMSE={optimal['cv_score']:.3f}")
     else:
-        # Use variance-based selection
-        chosen_n_components = None
+        # Use provided or auto-tune (existing logic)
+        if embedding_dim is None:
+            try:
+                best_embedding_dim = suggest_parameters(series_values)
+                if verbose:
+                    print(f"Auto-tuned embedding_dim (L): {best_embedding_dim}")
+            except Exception as e:
+                if verbose:
+                    print(f"Warning: Failed to auto-tune. Falling back. Error: {e}")
+                best_embedding_dim = max(2, len(series_values) // 10)
+                if verbose:
+                    print(f"Fallback embedding_dim (L): {best_embedding_dim}")
+        else:
+            best_embedding_dim = embedding_dim
+            if verbose:
+                print(f"Using provided embedding_dim (L): {best_embedding_dim}")
+        
+        chosen_n_components = fixed_n_components  # Will be set in section 3
+
+    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+    # 3. Decide on component selection mode
+    # if fixed_n_components is not None:
+    #     # Explicit low-rank smoothing
+    #     chosen_n_components = int(fixed_n_components)
+    #     chosen_variance_threshold = variance_threshold  # still used if r is large
+    #     chosen_max_components = max_components
+    #     print(f"Using fixed_n_components={chosen_n_components}")
+    # else:
+    #     # Use variance-based selection
+    #     chosen_n_components = None
+    #     chosen_variance_threshold = variance_threshold
+    #     chosen_max_components = max_components
+    #     print(
+    #         f"Using variance_threshold={chosen_variance_threshold}, "
+    #         f"max_components={chosen_max_components}"
+    #     )
+
+    # print(f"Smoothing mode: {'Full smoothing (denoise ALL values)' if smooth_observed else 'Gap filling only'}")
+    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+
+    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+    # # 3. Decide on component selection mode
+    # if fixed_n_components is not None:
+    #     chosen_n_components = int(fixed_n_components)
+    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+    # 3. Decide on component selection mode (if not already optimized)
+    if chosen_n_components is None:  # Not set by optimizer
+        if fixed_n_components is not None:
+            chosen_n_components = int(fixed_n_components)
+        else:
+            chosen_n_components = None  # Use variance threshold
+        
         chosen_variance_threshold = variance_threshold
         chosen_max_components = max_components
-        print(
-            f"Using variance_threshold={chosen_variance_threshold}, "
-            f"max_components={chosen_max_components}"
-        )
+        
+        if verbose:
+            if chosen_n_components is not None:
+                print(f"Using fixed_n_components={chosen_n_components}")
+            else:
+                print(
+                    f"Using variance_threshold={chosen_variance_threshold}, "
+                    f"max_components={chosen_max_components}"
+                )
+    else:
+        # Already optimized - set other params
+        chosen_variance_threshold = variance_threshold
+        chosen_max_components = max_components
 
-    print(f"Smoothing mode: {'Full smoothing (denoise ALL values)' if smooth_observed else 'Gap filling only'}")
+    if verbose:
+        print(f"Smoothing mode: {'Full smoothing (denoise ALL values)' if smooth_observed else 'Gap filling only'}")
 
-    # 4. Run final SSA smoothing + imputation
+    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+    # # 4. Run final SSA smoothing + imputation
+    # imputed_series = impute_ssa(
+    #     data=data,
+    #     embedding_dim=best_embedding_dim,
+    #     n_components=chosen_n_components,
+    #     variance_threshold=chosen_variance_threshold,
+    #     max_components=chosen_max_components,
+    #     time_col=time_col,
+    #     value_col=value_col,
+    #     max_iter=50,
+    #     smooth_observed=smooth_observed,
+    # )
+    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+
     imputed_series = impute_ssa(
-        data=data,
-        embedding_dim=best_embedding_dim,
-        n_components=chosen_n_components,
-        variance_threshold=chosen_variance_threshold,
-        max_components=chosen_max_components,
-        time_col=time_col,
-        value_col=value_col,
-        max_iter=50,
-        smooth_observed=smooth_observed,
-    )
+            data=data,
+            embedding_dim=best_embedding_dim,
+            n_components=chosen_n_components,
+            variance_threshold=chosen_variance_threshold,
+            max_components=chosen_max_components,
+            time_col=time_col,
+            value_col=value_col,
+            max_iter=max_iter,
+            tol=tol,
+            smooth_observed=smooth_observed,
+        )
 
     # 5. Optional: simple validation (can be turned off if not needed)
     try:
@@ -213,9 +310,16 @@ def run_ssa_smoothing_workflow(
             max_iter=30,
             smooth_observed=smooth_observed,
         )
-    except Exception as e:
-        print(f"Error during validation: {e}")
+    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+    # except Exception as e:
+    #     print(f"Error during validation: {e}")
+    #     validation_metrics = {"rmse": np.nan, "mae": np.nan, "r2": np.nan}
+    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+    except (ValueError, RuntimeError) as e:
+        if verbose:
+            print(f"Warning: Validation failed: {e}")
         validation_metrics = {"rmse": np.nan, "mae": np.nan, "r2": np.nan}
+
 
     return {
         "imputed_series": imputed_series,
@@ -232,63 +336,117 @@ def run_ssa_smoothing_workflow(
 
 # --- Example Usage ---
 if __name__ == "__main__":
+    import matplotlib.pyplot as plt
+    
     np.random.seed(42)
-    # 1. Create a synthetic dummy dataset (pd.Series with DatetimeIndex)
+    
+    # 1. Generate synthetic data with multiple characteristics
     n = 300
     t = np.arange(n)
-
-    # Smooth trend + low-frequency oscillation
-    y_true = np.sin(t * 0.1) + 0.5 * np.sin(t * 0.05) + (t * 0.02)
-    # Add noise
-    y_noise = y_true + np.random.normal(0, 0.2, n)
-
-    # Introduce missing values
-    y_missing = y_noise.copy()
-    y_missing[50:80] = np.nan  # Block gap
-    y_missing[np.random.choice(n, 30, replace=False)] = np.nan  # Random gaps
-
+    
+    # Components: trend + two seasonal patterns + noise
+    trend = 0.02 * t
+    slow_season = 3 * np.sin(2 * np.pi * t / 80)
+    fast_season = 1 * np.sin(2 * np.pi * t / 20)
+    noise = np.random.normal(0, 0.3, n)
+    
+    y_true = trend + slow_season + fast_season
+    y_observed = y_true + noise
+    
+    # Create realistic missing patterns
+    y_missing = y_observed.copy()
+    y_missing[50:80] = np.nan      # Block gap 1
+    y_missing[150:170] = np.nan    # Block gap 2
+    y_missing[250:265] = np.nan    # Block gap 3
+    # Random scattered gaps (20% additional)
+    random_gaps = np.random.choice(n, size=int(n * 0.2), replace=False)
+    y_missing[random_gaps] = np.nan
+    
     date_index = pd.date_range(start="2024-01-01", periods=n, freq="D")
     series_data = pd.Series(y_missing, index=date_index)
-
-    print("Created synthetic data for SSA smoothing test.")
+    
+    missing_pct = series_data.isna().sum() / n * 100
+    print("="*60)
+    print("SYNTHETIC DATA GENERATED")
+    print("="*60)
     print(f"Total points: {n}")
-    print(f"Missing: {series_data.isna().sum()} points")
-
-    # 2. Run SSA smoothing workflow
-    # Example: very smooth trend with 3 components
-    results = run_ssa_smoothing_workflow(
-        data=series_data,
-        fixed_n_components=None,       # control smoothness here
-        variance_threshold=0.95,    # used only if fixed_n_components=None
-        max_components=5,           # optional cap
-        smooth_observed=True,       # CRITICAL: Enable full smoothing!
-    )
-
-    print("\n--- WORKFLOW COMPLETE ---")
-    print("Parameters used:", results["parameters"])
-    print("Validation metrics:", results["validation_metrics"])
-
-    # 3. Plot (optional)
-    try:
-        import matplotlib.pyplot as plt
-
-        plt.figure(figsize=(15, 6))
-        pd.Series(y_true, index=date_index).plot(
-            label="True underlying signal", style="k--", alpha=0.4
+    print(f"Missing: {series_data.isna().sum()} ({missing_pct:.1f}%)")
+    print(f"Observed range: [{series_data.min():.2f}, {series_data.max():.2f}]")
+    print("="*60)
+    
+    # 2. Test with different configurations
+    configs = [
+        {
+            "name": "Method 1: Auto-Optimized (CV)",
+            "params": {
+                "smooth_observed": False,  # Will auto-optimize both params
+                "verbose": True
+            }
+        },
+        {
+            "name": "Method 2: Manual Fixed",
+            "params": {
+                "embedding_dim": 40,
+                "fixed_n_components": 5,
+                "smooth_observed": False,
+                "verbose": True
+            }
+        },
+        {
+            "name": "Method 3: Auto embedding_dim only",
+            "params": {
+                "fixed_n_components": 3,  # Smooth extraction
+                "smooth_observed": True,
+                "verbose": True
+            }
+        }
+    ]
+    
+    results_list = []
+    
+    for config in configs:
+        print(f"\nTesting: {config['name']}")
+        result = run_ssa_smoothing_workflow(
+            data=series_data,
+            **config['params']
         )
-        pd.Series(y_noise, index=date_index).plot(
-            label="Noisy observed (no gaps)", style="gray", alpha=0.3
-        )
-        series_data.plot(
-            label="Observed with gaps", style="b.", alpha=0.6, markersize=5
-        )
-        results["imputed_series"].plot(
-            label="SSA smoothed & imputed", style="r-", linewidth=2
-        )
-
-        plt.title("Iterative SSA Smoothing & Imputation")
-        plt.legend()
-        plt.tight_layout()
-        plt.show()
-    except ImportError:
-        print("Matplotlib not found. Skipping plot.")
+        results_list.append((config['name'], result))
+        
+        # Calculate accuracy on observed points
+        observed_mask = ~np.isnan(y_observed)
+        rmse_obs = np.sqrt(np.mean(
+            (result['imputed_series'].values[observed_mask] - y_true[observed_mask])**2
+        ))
+        print(f"  RMSE vs true signal: {rmse_obs:.3f}")
+        print(f"  Validation metrics: {result['validation_metrics']}")
+    
+    # 3. Visualize comparison
+    fig, axes = plt.subplots(2, 1, figsize=(16, 10))
+    
+    for ax, (name, result) in zip(axes, results_list):
+        # Plot data
+        ax.plot(date_index, y_true, 'k-', linewidth=1.5, 
+                alpha=0.4, label='True signal')
+        ax.plot(date_index, y_observed, 'gray', linewidth=0.5, 
+                alpha=0.3, label='Noisy observed')
+        ax.plot(date_index, series_data, 'b.', markersize=4, 
+                alpha=0.6, label='With gaps')
+        ax.plot(date_index, result['imputed_series'], 'r-', 
+                linewidth=2, alpha=0.8, label='Imputed')
+        
+        # Formatting
+        ax.set_title(f"{name} | " + 
+                    f"embedding_dim={result['parameters']['embedding_dim']}, " +
+                    f"n_components={result['parameters']['n_components']}", 
+                    fontsize=11, fontweight='bold')
+        ax.set_ylabel('Value')
+        ax.legend(loc='upper left', fontsize=9)
+        ax.grid(True, alpha=0.3)
+    
+    axes[1].set_xlabel('Date')
+    plt.tight_layout()
+    plt.savefig('ssa_workflow_test.png', dpi=150, bbox_inches='tight')
+    print("\n" + "="*60)
+    print("Plot saved: ssa_workflow_test.png")
+    print("="*60)
+    plt.show()
