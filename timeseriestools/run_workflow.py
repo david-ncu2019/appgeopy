@@ -11,13 +11,16 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import mean_squared_error, r2_score
 
-# Import SSA functions
+# Import SSA functions - handle both relative and absolute imports
 try:
-    from pca_imputation import impute_ssa, suggest_parameters
+    from .pca_imputation import impute_ssa, suggest_parameters
 except ImportError:
-    print("Error: Could not import from 'pca_imputation.py'.")
-    print("Please ensure the file is in the same directory.")
-    raise
+    try:
+        from pca_imputation import impute_ssa, suggest_parameters
+    except ImportError:
+        print("Error: Could not import from 'pca_imputation.py'.")
+        print("Please ensure the file is in the same directory.")
+        raise
 
 
 def _calculate_imputation_metrics(original_values, imputed_values):

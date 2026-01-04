@@ -8,4 +8,4 @@ from . import detect_jumps
 from . import correct_jumps
 from . import reconstruct
 
-__all__ = ['detect_jumps', 'correct_jumps', 'reconstruct']
+__all__ = ['detect_jumps', 'correct_jumps', 'reconstruct', 'pca_imputation', 'run_workflow']

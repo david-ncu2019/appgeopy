@@ -1,23 +1,21 @@
 """
-GPS Jump Correction Module
-Corrects time series based on manually selected jump dates.
+GPS Jump Correction Module (Robust Anchor Strategy)
+Corrects time series by aligning all segments to the longest stable segment.
 """
 from __future__ import annotations
 
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.lines import Line2D
 from pathlib import Path
 from typing import List, Tuple, Dict, Optional
-
 
 def correct_jumps(
     timeseries: pd.Series,
     jump_dates: List[str]
 ) -> Tuple[pd.Series, List[float]]:
     """
-    Correct jumps using robust median alignment.
+    Corrects jumps by aligning everything to the LONGEST segment (The Anchor).
     
     Args:
         timeseries: Time series with DatetimeIndex
@@ -25,26 +23,40 @@ def correct_jumps(
     
     Returns:
         corrected: Jump-corrected time series
-        offsets: List of offsets applied (in meters)
+        step_sizes: List of step sizes at each jump date (for plotting)
     """
     corrected = timeseries.copy()
     
+    # 1. Handle Input
     if not jump_dates:
         return corrected, []
     
-    # Convert dates to indices
-    jump_dates_dt = [pd.to_datetime(d) for d in jump_dates]
-    jump_indices = [
-        timeseries.index.get_loc(date) for date in jump_dates_dt 
-        if date in timeseries.index
-    ]
+    # Sort and unique dates
+    jump_dates_dt = sorted(list(set([pd.to_datetime(d) for d in jump_dates])))
+    
+    # Find indices in the array
+    jump_indices = []
+    valid_jump_dates = []
+    
+    for date in jump_dates_dt:
+        if date in timeseries.index:
+            loc = timeseries.index.get_loc(date)
+            # Handle non-unique index
+            if isinstance(loc, slice):
+                loc = loc.start
+            elif isinstance(loc, np.ndarray):
+                loc = np.where(loc)[0][0]
+            
+            # Only add if it's not at the very start or end
+            if 0 < loc < len(timeseries):
+                jump_indices.append(loc)
+                valid_jump_dates.append(date)
     
     if not jump_indices:
         return corrected, []
     
-    jump_indices = sorted(jump_indices)
-    
-    # Create segments
+    # 2. Define Segments
+    # segments = [(start, end), (start, end), ...]
     segments = []
     start = 0
     for jump_idx in jump_indices:
@@ -52,34 +64,91 @@ def correct_jumps(
         start = jump_idx
     segments.append((start, len(timeseries)))
     
-    # Calculate and apply offsets
-    offsets = [0.0]
+    # 3. Find the Anchor (Longest Segment)
+    # We want to keep the longest stable period fixed at 0 offset.
+    lengths = [end - start for start, end in segments]
+    anchor_idx = np.argmax(lengths)
+    
+    # Initialize offsets for each segment
+    segment_offsets = np.zeros(len(segments))
+    step_sizes_map = {} # Key: jump_index, Value: step_size
+    
     values = timeseries.values
     
-    for i in range(1, len(segments)):
-        seg_start, seg_end = segments[i]
-        prev_start, prev_end = segments[i-1]
+    # 4. Backward Pass (Align segments BEFORE anchor)
+    # e.g., If Anchor is Seg 1, we align Seg 0 to Seg 1.
+    for i in range(anchor_idx - 1, -1, -1):
+        # Current Segment: i
+        # Target Segment (already aligned): i + 1
         
-        curr_vals = values[seg_start:seg_end]
-        prev_vals = values[prev_start:prev_end]
+        curr_s, curr_e = segments[i]
+        next_s, next_e = segments[i+1] # This is the target we align TO
+        
+        # Get Data at the "Edge" (Boundary between i and i+1)
+        curr_vals = values[curr_s:curr_e]
+        next_vals = values[next_s:next_e]
+        
+        curr_valid = curr_vals[~np.isnan(curr_vals)]
+        next_valid = next_vals[~np.isnan(next_vals)]
+        
+        step = 0.0
+        if len(curr_valid) >= 5 and len(next_valid) >= 5:
+            n_edge = min(30, len(curr_valid)//2, len(next_valid)//2)
+            
+            # We want: Median(Corrected_Curr) == Median(Corrected_Next)
+            # Median(Raw_Curr + Offset_Curr) == Median(Raw_Next + Offset_Next)
+            # Offset_Curr = Median(Raw_Next + Offset_Next) - Median(Raw_Curr)
+            
+            target_level = np.median(next_valid[:n_edge] + segment_offsets[i+1])
+            current_level = np.median(curr_valid[-n_edge:])
+            
+            # Offset needed for THIS segment
+            segment_offsets[i] = target_level - current_level
+            
+            # The "Step Size" at the jump is the difference in offsets
+            # Jump corresponds to boundary `next_s` (which is same as `curr_e`)
+            step_sizes_map[next_s] = segment_offsets[i+1] - segment_offsets[i]
+            
+    # 5. Forward Pass (Align segments AFTER anchor)
+    # e.g., If Anchor is Seg 1, we align Seg 2 to Seg 1.
+    for i in range(anchor_idx + 1, len(segments)):
+        # Current Segment: i
+        # Previous Segment (already aligned): i - 1
+        
+        curr_s, curr_e = segments[i]
+        prev_s, prev_e = segments[i-1]
+        
+        curr_vals = values[curr_s:curr_e]
+        prev_vals = values[prev_s:prev_e]
         
         curr_valid = curr_vals[~np.isnan(curr_vals)]
         prev_valid = prev_vals[~np.isnan(prev_vals)]
         
-        if len(curr_valid) < 10 or len(prev_valid) < 10:
-            offsets.append(0.0)
-            continue
+        step = 0.0
+        if len(curr_valid) >= 5 and len(prev_valid) >= 5:
+            n_edge = min(30, len(curr_valid)//2, len(prev_valid)//2)
+            
+            # Target is the END of the previous segment
+            target_level = np.median(prev_valid[-n_edge:] + segment_offsets[i-1])
+            current_level = np.median(curr_valid[:n_edge])
+            
+            segment_offsets[i] = target_level - current_level
+            
+            # Jump corresponds to boundary `curr_s`
+            step_sizes_map[curr_s] = segment_offsets[i-1] - segment_offsets[i]
+
+    # 6. Apply Offsets
+    for i, (start, end) in enumerate(segments):
+        if segment_offsets[i] != 0:
+            corrected.iloc[start:end] += segment_offsets[i]
+            
+    # 7. Collect Step Sizes in order of jump_dates
+    # Note: step_size is (Pre - Post), consistent with standard definition
+    final_steps = []
+    for idx in jump_indices:
+        final_steps.append(step_sizes_map.get(idx, 0.0))
         
-        n_edge = min(30, len(prev_valid)//2, len(curr_valid)//2)
-        
-        prev_edge = np.median(prev_valid[-n_edge:])
-        curr_edge = np.median(curr_valid[:n_edge])
-        offset = prev_edge - curr_edge
-        
-        offsets.append(offset)
-        corrected.iloc[seg_start:seg_end] += offset
-    
-    return corrected, offsets
+    return corrected, final_steps
 
 
 def plot_jump_correction(
@@ -89,98 +158,38 @@ def plot_jump_correction(
     offsets: List[float],
     save_path: Path
 ) -> None:
-    """
-    Publication-quality plot comparing original and jump-corrected time series,
-    annotated with correction magnitudes.
-    """
-    # 1. Global Publication Styling (serif fonts, high DPI)
-    plt.rcParams.update({
-        "font.family": "serif",
-        "font.serif": ["Times New Roman", "DejaVu Serif"],
-        "axes.titlesize": 14,
-        "axes.labelsize": 12,
-        "xtick.labelsize": 10,
-        "ytick.labelsize": 10,
-        "figure.dpi": 300
-    })
+    """Publication-quality plot."""
+    plt.rcParams.update({'font.family': 'serif', 'font.size': 10, 'figure.dpi': 300})
 
-    fig, axes = plt.subplots(2, 1, figsize=(8, 5), sharex=True, gridspec_kw={'hspace': 0.1})
+    fig, axes = plt.subplots(2, 1, figsize=(10, 6), sharex=True, gridspec_kw={'hspace': 0.1})
     
-    # Convert string dates to datetime objects
-    jump_dates_dt = [pd.to_datetime(d) for d in jump_dates]
-    
-    # Define professional color palette
-    color_orig = '#34495e'  # Dark slate blue/gray
-    color_corr = '#008080'  # Teal/Dark Cyan
-    color_jump = '#c0392b'  # Deep red
-    
-    # --- Subplot 1: Original Data & Jump Events ---
+    # Valid jump dates used
+    jump_dates_dt = sorted(list(set([pd.to_datetime(d) for d in jump_dates])))
+    jump_dates_dt = [d for d in jump_dates_dt if d in original.index]
+
+    # Plot 1: Original
     ax0 = axes[0]
-    # Use slightly smaller markers and lower alpha for dense data
-    ax0.plot(original.index, original.values, 'o', 
-             ms=2.5, alpha=0.8, color=color_orig, markeredgewidth=0, label='Raw Data')
+    ax0.plot(original.index, original.values, '.', ms=2, color='gray', alpha=0.5, label='Raw')
     
-    # Iterate through dates and offsets simultaneously to annotate
-    # We use enumerate to alternate label heights to avoid crowding
-    for i, (jd, offset) in enumerate(zip(jump_dates_dt, offsets)):
-        # Vertical line for the jump
-        ax0.axvline(jd, color=color_jump, ls='-', lw=1.5, alpha=0.8)
-        
-        # Annotation showing the offset magnitude
-        # Alternate vertical position to prevent overlap
-        y_pos_factor = 1.05 if i % 2 == 0 else 1.12
-        
-        label_text = f"{offset:+.3f} m" # Format with +/- sign and 3 decimals
-        
-        ax0.text(
-            x=jd, y=y_pos_factor, s=label_text,
-            transform=ax0.get_xaxis_transform(), 
-            color=color_jump, fontsize=9, fontweight='bold',
-            ha='center', va='bottom', rotation=0,
-            bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=color_jump, alpha=0.9)
-        )
+    for jd, step in zip(jump_dates_dt, offsets):
+        ax0.axvline(jd, color='red', lw=1, ls='--')
+        # Annotate step
+        ax0.text(jd, ax0.get_ylim()[1], f" {step*1000:+.1f}mm", 
+                 rotation=90, verticalalignment='top', color='red', fontsize=8, fontweight='bold')
 
-    ax0.set_ylabel('Displacement (m)', fontweight='bold')
-    # Use a descriptive title, move legend to a clean spot
-    ax0.set_title(r'$\bf{a.}$ Original Time Series with Detected Jumps', loc='left')
-    
-    # Custom legend for top plot
-    legend_elements_0 = [
-        Line2D([0], [0], color=color_orig, marker='o', ls='None', alpha=0.6, label='Raw GPS Data'),
-        Line2D([0], [0], color=color_jump, ls='-', lw=1.5, label='Detected Jump Event'),
-    ]
-    ax0.legend(handles=legend_elements_0, loc='upper left', frameon=True, fontsize=10)
+    ax0.set_ylabel('Original (m)')
+    ax0.legend(loc='upper right')
+    ax0.grid(True, ls=':', alpha=0.5)
 
-    # --- Subplot 2: Corrected Data ---
+    # Plot 2: Corrected
     ax1 = axes[1]
-    ax1.plot(corrected.index, corrected.values, 'o', 
-             ms=2.5, alpha=0.8, color=color_corr, markeredgewidth=0, label='Corrected Data')
-             
-    ax1.set_ylabel('Displacement (m)', fontweight='bold')
-    ax1.set_xlabel('Date', fontweight='bold')
-    ax1.set_title(r'$\bf{b.}$ Jump-Corrected Time Series', loc='left')
+    ax1.plot(corrected.index, corrected.values, '.', ms=2, color='teal', alpha=0.5, label='Corrected')
+    ax1.set_ylabel('Corrected (m)')
+    ax1.legend(loc='upper right')
+    ax1.grid(True, ls=':', alpha=0.5)
     
-    # Simple legend for bottom plot
-    ax1.legend(loc='upper left', frameon=True, fontsize=10)
-
-    # --- Common Styling Refinements ---
-    for ax in axes:
-        ax.grid(True, linestyle=':', color='gray', alpha=0.5)
-        # Remove top and right spines for a cleaner scientific look
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
-        # Ensure y-axis limits match so visual comparison is accurate
-        combined_min = min(original.min(), corrected.min())
-        combined_max = max(original.max(), corrected.max())
-        # Add a small buffer (5%)
-        y_range = combined_max - combined_min
-        ax.set_ylim(combined_min - 0.05*y_range, combined_max + 0.05*y_range)
-
-    # Adjust layout to accommodate top labels
-    plt.tight_layout(rect=[0, 0, 1, 0.95])
-    
-    # Save high-resolution output
-    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    plt.tight_layout()
+    plt.savefig(save_path, bbox_inches='tight')
     plt.close()
 
 
@@ -192,20 +201,7 @@ def run_jump_correction(
     savefig: bool = False,
     verbose: bool = True
 ) -> pd.Series:
-    """
-    Correct jumps and save results.
     
-    Args:
-        timeseries: Time series with DatetimeIndex
-        station_name: Station identifier
-        jump_dates: List of jump dates to correct
-        output_dir: Output directory
-        savefig: Save diagnostic plot
-        verbose: Print progress messages
-    
-    Returns:
-        corrected: Jump-corrected time series
-    """
     output_path = Path(output_dir)
     output_path.mkdir(exist_ok=True, parents=True)
     
@@ -213,28 +209,24 @@ def run_jump_correction(
         print(f"\n{'='*60}")
         print(f"JUMP CORRECTION: {station_name}")
         print(f"{'='*60}")
-    
-    # Correct jumps
-    corrected, offsets = correct_jumps(timeseries, jump_dates)
+        
+    corrected, steps = correct_jumps(timeseries, jump_dates)
     
     if verbose:
-        print(f"Jumps: {len(jump_dates)}")
-        for i, (date, offset) in enumerate(zip(jump_dates, offsets[1:]), 1):
-            print(f"  {i}. {date}: {offset*1000:.1f} mm")
-    
+        print(f"Jumps: {len(steps)}")
+        for i, (d, s) in enumerate(zip(jump_dates, steps)):
+            print(f"  {i+1}. {d}: {s*1000:+.1f} mm")
+            
     # Save
-    csv_path = output_path / f"{station_name}_corrected.csv"
-    corrected.to_csv(csv_path, header=True)
+    csv_name = output_path / f"{station_name}_corrected.csv"
+    corrected.to_csv(csv_name, header=True)
     
     if savefig:
-        plot_path = output_path / f"{station_name}_correction.png"
-        plot_jump_correction(timeseries, corrected, jump_dates, offsets, plot_path)
-    
+        plot_name = output_path / f"{station_name}_correction.png"
+        plot_jump_correction(timeseries, corrected, jump_dates, steps, plot_name)
+        
     if verbose:
-        print(f"\nOutputs:")
-        print(f"  {csv_path}")
-        if savefig:
-            print(f"  {plot_path}")
+        print(f"\nOutputs:\n  {csv_name}")
     
     return corrected
 
