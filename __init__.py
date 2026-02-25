@@ -1,9 +1,7 @@
-# Edited on 2025-06-06 to trigger commit
-import warnings  # Warning control
+import warnings
+warnings.filterwarnings("ignore")
 
-# Filter Warnings
-warnings.filterwarnings("ignore")  # Suppress all warnings
-
+# Legacy modules (will be removed in a future version)
 from .analysis import *
 from .data_io import *
 from .datetime_handle import *
@@ -13,9 +11,10 @@ from .smoothing import *
 from .visualize import *
 from .interpolate import *
 from .geocube import *
-
-# Import gwatertools package
 from .insartools import *
 from .gwatertools import *
 from .mlcwtools import *
 from .timeseriestools import *
+
+# Core classes (new package) - imported last to take precedence over legacy names
+from .core import TimeSeries, TableArray, SpatialTableArray, DataCube

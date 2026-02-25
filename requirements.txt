@@ -1,0 +1,15 @@
+numpy
+pandas
+geopandas
+matplotlib
+scipy
+seaborn
+scikit-learn
+xarray
+ruptures
+h5py
+openpyxl
+pyproj
+shapely
+GDAL
+fiona

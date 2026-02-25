@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='appgeopy',
-    version='0.1',
+    version='1.0.0',
     packages=find_packages(),
     install_requires=[
         'numpy',
@@ -12,17 +12,24 @@ setup(
         'scipy',
         'seaborn',
         'scikit-learn',
-        'prophet==1.1.1',
-        'holidays==0.24'
+        'xarray',
+        'ruptures',
+        'h5py',
+        'openpyxl',
+        'pyproj',
+        'shapely',
+        'GDAL',
+        'fiona',
     ],
     python_requires='>=3.8',
     author='David Nguyen',
     author_email='vinhtruongkhtn@gmail.com',
-    description='A package for processing and analyzing time-series data.',
-    url='https://github.com/yourusername/signal_toolbox',
+    description='A Python package for processing and analyzing geospatial time-series data.',
+    url='https://github.com/yourusername/appgeopy',
     classifiers=[
         'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.10',
         'License :: OSI Approved :: MIT License',
         'Operating System :: OS Independent',
     ],
