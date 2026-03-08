@@ -17,7 +17,8 @@ Examples
 from __future__ import annotations
 
 import os
-from typing import Dict, List, Optional, Union
+import warnings
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -235,7 +236,7 @@ class DataCube:
     # Data Extraction
     # =========================================================================
 
-    def extract_timeseries(self, var=None, **coords):
+    def extract_timeseries(self, var: Optional[str] = None, **coords: Any) -> TimeSeries:
         """
         Extract a 1D TimeSeries at a specific spatial location.
 
@@ -275,7 +276,7 @@ class DataCube:
         # If it collapsed to a scalar, return single-element TimeSeries
         return TimeSeries([series], name=var)
 
-    def extract_spatial_slice(self, time, var=None):
+    def extract_spatial_slice(self, time: Union[str, pd.Timestamp], var: Optional[str] = None) -> pd.DataFrame:
         """
         Extract a 2D spatial slice at a specific time.
 
@@ -314,7 +315,7 @@ class DataCube:
     # Temporal Statistics
     # =========================================================================
 
-    def compute_temporal_statistics(self, variables=None, statistics="mean"):
+    def compute_temporal_statistics(self, variables: Optional[Union[str, List[str]]] = None, statistics: Union[str, List[str]] = "mean") -> "DataCube":
         """
         Compute statistics across the time dimension.
 

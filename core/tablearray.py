@@ -189,8 +189,8 @@ class TableArray(pd.DataFrame):
                 self.to_excel(writer, sheet_name=sheet_name, index=index)
             if verbose:
                 print(f"Written to sheet '{sheet_name}' in '{filepath}'.")
-        except Exception as e:
-            print(f"Error writing Excel: {e}")
+        except (PermissionError, OSError, ValueError) as e:
+            raise IOError(f"Failed to write Excel sheet '{sheet_name}' to '{filepath}'.") from e
 
     def to_json_file(self, folder_path, file_name, indent=4, sort_keys=True,
                      overwrite=True):
@@ -262,7 +262,7 @@ class TableArray(pd.DataFrame):
             return None
         try:
             return pd.ExcelFile(filepath).sheet_names
-        except Exception as e:
+        except (OSError, ValueError) as e:
             print(f"Error reading Excel: {e}")
             return None
 
@@ -403,13 +403,13 @@ class TableArray(pd.DataFrame):
             raise ValueError("DataFrame must have a DatetimeIndex.")
 
         full_range = pd.date_range(self.index[0], self.index[-1], freq=freq)
-        missing = [d for d in full_range if d not in self.index]
+        missing_dates = full_range.difference(self.index)
 
-        if not missing:
+        if len(missing_dates) == 0:
             return self.copy()
 
         missing_df = pd.DataFrame(
-            np.nan, index=missing, columns=self.columns
+            np.nan, index=missing_dates, columns=self.columns
         )
         combined = pd.concat([self, missing_df]).sort_index()
         return TableArray(combined)

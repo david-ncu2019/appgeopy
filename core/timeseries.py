@@ -90,7 +90,7 @@ class TimeSeries(pd.Series):
     # Time Alignment
     # =========================================================================
 
-    def align_to_fulltime(self, freq="D"):
+    def align_to_fulltime(self, freq: str = "D") -> "TimeSeries":
         """
         Extend the series to cover the full date range, filling gaps with NaN.
 
@@ -224,7 +224,8 @@ class TimeSeries(pd.Series):
         Returns
         -------
         pd.DataFrame
-            DataFrame with peak/trough dates and values, sorted by value.
+            DataFrame with all peak/trough dates, values, and type column.
+            Columns: 'value', 'type' ('peak' or 'trough'). Sorted by value descending.
 
         Raises
         ------
@@ -235,29 +236,26 @@ class TimeSeries(pd.Series):
         --------
         >>> peaks, troughs = ts.detect_peaks_troughs()
         >>> summary = ts.find_peak_to_peak(peaks, troughs)
+        >>> summary[summary['type'] == 'peak']
         """
         if not isinstance(self.index, pd.DatetimeIndex):
             raise ValueError("Index must be a DatetimeIndex.")
         if self.isnull().any():
             raise ValueError("Series contains NaN. Handle them first.")
 
-        df = self.to_frame()
-        peak_dates = df.iloc[peak_idx].idxmax()[0]
-        trough_dates = df.iloc[trough_idx].idxmin()[0]
-        peak_values = df.iloc[peak_idx].max()[0]
-        trough_values = df.iloc[trough_idx].min()[0]
-
-        result = pd.DataFrame(
-            {"date": [peak_dates, trough_dates], "value": [peak_values, trough_values]}
-        ).set_index("date")
-        return result.sort_values(by="value", ascending=False)
+        peak_df = self.iloc[peak_idx].to_frame(name="value")
+        peak_df["type"] = "peak"
+        trough_df = self.iloc[trough_idx].to_frame(name="value")
+        trough_df["type"] = "trough"
+        result = pd.concat([peak_df, trough_df]).sort_values("value", ascending=False)
+        return result
 
     # =========================================================================
     # Trend Analysis
     # =========================================================================
 
-    def get_trend(self, method="linear", force_zero_intercept=False, order=2,
-                  x_estimate=None):
+    def get_trend(self, method: str = "linear", force_zero_intercept: bool = False,
+                  order: int = 2, x_estimate: Optional[np.ndarray] = None) -> Tuple[Union["TimeSeries", pd.Series], Union[float, np.ndarray]]:
         """
         Fit a trend line to the series.
 
@@ -322,7 +320,7 @@ class TimeSeries(pd.Series):
                 coefficients = (
                     poly_model.named_steps["ransacregressor"].estimator_.coef_
                 )
-            except Exception:
+            except (ValueError, np.linalg.LinAlgError):
                 poly_model = make_pipeline(
                     PolynomialFeatures(order), LinearRegression()
                 )
@@ -340,7 +338,7 @@ class TimeSeries(pd.Series):
     # Seasonality (FFT)
     # =========================================================================
 
-    def find_seasonality(self, interval=1):
+    def find_seasonality(self, interval: float = 1) -> pd.DataFrame:
         """
         Analyze seasonality using Fourier Transform.
 
@@ -493,7 +491,7 @@ class TimeSeries(pd.Series):
     # Smoothing
     # =========================================================================
 
-    def smooth(self, window=7):
+    def smooth(self, window: int = 7) -> "TimeSeries":
         """
         Apply centered moving average smoothing.
 
@@ -579,7 +577,7 @@ class TimeSeries(pd.Series):
     # Jump Detection & Correction (from timeseriestools)
     # =========================================================================
 
-    def detect_data_gaps(self, gap_threshold_days=30):
+    def detect_data_gaps(self, gap_threshold_days: int = 30) -> List[Dict]:
         """
         Identify large data gaps between valid measurements.
 
@@ -613,7 +611,7 @@ class TimeSeries(pd.Series):
                 )
         return gaps
 
-    def detect_jumps(self, penalty=20, min_segment_days=90, gap_threshold_days=60):
+    def detect_jumps(self, penalty: int = 20, min_segment_days: int = 90, gap_threshold_days: int = 60) -> Tuple[List, List, List]:
         """
         Detect discontinuities using change-point detection (ruptures.Pelt).
 
@@ -714,11 +712,11 @@ class TimeSeries(pd.Series):
 
             return jump_dates_filtered, jump_types, gaps
 
-        except Exception as e:
+        except (ValueError, RuntimeError) as e:
             warnings.warn(f"Jump detection error: {e}")
             return [], [], []
 
-    def correct_jumps(self, jump_dates):
+    def correct_jumps(self, jump_dates: List) -> Tuple["TimeSeries", List[float]]:
         """
         Correct jumps by aligning segments to the longest (anchor) segment.
 
@@ -831,7 +829,7 @@ class TimeSeries(pd.Series):
     # Outlier Detection
     # =========================================================================
 
-    def detect_outliers(self, threshold=3.5, use_time=True):
+    def detect_outliers(self, threshold: float = 3.5, use_time: bool = True) -> "TimeSeries":
         """
         Detect outliers using rate-of-change and Modified Z-Score (MAD).
 
@@ -903,15 +901,15 @@ class TimeSeries(pd.Series):
 
     def fill_gaps(
         self,
-        method="ssa",
-        embedding_dim=None,
-        n_components=None,
-        variance_threshold=0.9,
-        max_components=None,
-        max_iter=50,
-        tol=1e-5,
-        smooth_observed=False,
-    ):
+        method: str = "ssa",
+        embedding_dim: Optional[int] = None,
+        n_components: Optional[int] = None,
+        variance_threshold: float = 0.9,
+        max_components: Optional[int] = None,
+        max_iter: int = 50,
+        tol: float = 1e-5,
+        smooth_observed: bool = False,
+    ) -> "TimeSeries":
         """
         Fill missing values using Singular Spectrum Analysis (SSA).
 
@@ -1012,7 +1010,7 @@ class TimeSeries(pd.Series):
     # Sinusoidal Modeling
     # =========================================================================
 
-    def fit_sinusoidal(self, periods, predict_time=None):
+    def fit_sinusoidal(self, periods: List[float], predict_time: Optional[np.ndarray] = None) -> Tuple[Optional[np.ndarray], Dict]:
         """
         Fit a sinusoidal model using Linear Regression on Fourier terms.
 
@@ -1141,14 +1139,14 @@ class TimeSeries(pd.Series):
     @classmethod
     def synthetic(
         cls,
-        start_date="2020-01-01",
-        end_date="2024-12-31",
-        linear_slope=0.0,
-        amplitude_list=None,
-        period_list=None,
-        variance=0.01,
-        random_seed=42,
-    ):
+        start_date: str = "2020-01-01",
+        end_date: str = "2024-12-31",
+        linear_slope: float = 0.0,
+        amplitude_list: Optional[List[float]] = None,
+        period_list: Optional[List[float]] = None,
+        variance: float = 0.01,
+        random_seed: int = 42,
+    ) -> "TimeSeries":
         """
         Generate a synthetic time-series with sinusoidal + trend + noise.
 
@@ -1188,7 +1186,7 @@ class TimeSeries(pd.Series):
         if period_list is None:
             period_list = [1.0]
 
-        np.random.seed(random_seed)
+        rng = np.random.default_rng(random_seed)
         dates = pd.date_range(start=start_date, end=end_date, freq="D")
         days = (dates - dates[0]).days
         pi = np.pi
@@ -1201,7 +1199,7 @@ class TimeSeries(pd.Series):
             axis=0,
         )
         trend = linear_slope * days
-        noise = np.random.normal(scale=variance, size=len(dates))
+        noise = rng.normal(scale=variance, size=len(dates))
 
         return cls(seasonal + trend + noise, index=dates, name="synthetic")
 
@@ -1323,22 +1321,16 @@ class TimeSeries(pd.Series):
             # Low-rank reconstruction
             X_recon = (U[:, :r] @ np.diag(S[:r]) @ Vt[:r, :]) + X_mean
 
-            # Diagonal averaging
-            recon = np.full(n, np.nan)
+            # Diagonal averaging (vectorized)
+            rows, cols = np.indices(X_recon.shape)
+            positions = rows + cols
+            recon = np.zeros(n)
             counts = np.zeros(n)
-            for i in range(X_recon.shape[0]):
-                for j in range(embedding_dim):
-                    pos = i + j
-                    if pos >= n:
-                        continue
-                    val = X_recon[i, j]
-                    if not np.isnan(val):
-                        if np.isnan(recon[pos]):
-                            recon[pos] = 0.0
-                        recon[pos] += val
-                        counts[pos] += 1
-            valid_idx = np.where(counts > 0)[0]
-            recon[valid_idx] /= counts[valid_idx]
+            np.add.at(recon, positions.ravel(), X_recon.ravel())
+            np.add.at(counts, positions.ravel(), 1.0)
+            valid = counts > 0
+            recon[valid] /= counts[valid]
+            recon[~valid] = np.nan
 
             # Update
             if smooth_observed:

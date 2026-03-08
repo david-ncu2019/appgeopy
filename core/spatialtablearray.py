@@ -18,7 +18,7 @@ from __future__ import annotations
 import math
 import os
 import warnings
-from typing import List, Optional, Union
+from typing import List, Optional, Tuple, Union
 
 import geopandas as gpd
 import numpy as np
@@ -553,20 +553,23 @@ class SpatialTableArray(gpd.GeoDataFrame):
     # =========================================================================
 
     @staticmethod
-    def _distance(a, b):
-        dx = abs(b[0] - a[0])
-        dy = abs(b[1] - a[1])
-        return (dx ** 2 + dy ** 2) ** 0.5
+    def _distance(a: Tuple[float, float], b: Tuple[float, float]) -> float:
+        return math.hypot(b[0] - a[0], b[1] - a[1])
 
     @staticmethod
-    def _get_split_point(a, b, dist):
+    def _get_split_point(a: Tuple[float, float], b: Tuple[float, float], dist: float) -> Tuple[float, float]:
         dx = b[0] - a[0]
         dy = b[1] - a[1]
+        # Handle vertical line segment (dx == 0) to avoid ZeroDivisionError
+        if dx == 0:
+            sign = 1 if dy >= 0 else -1
+            return a[0], a[1] + sign * dist
         m = dy / dx
         c = a[1] - (m * a[0])
         x = a[0] + (dist ** 2 / (1 + m ** 2)) ** 0.5
         y = m * x + c
-        if not (a[0] <= x <= b[0]) and (a[1] <= y <= b[1]):
+        # Fix: 'not' must negate the entire compound condition, not just the first part
+        if not (a[0] <= x <= b[0] and a[1] <= y <= b[1]):
             x = a[0] - (dist ** 2 / (1 + m ** 2)) ** 0.5
             y = m * x + c
         return x, y
