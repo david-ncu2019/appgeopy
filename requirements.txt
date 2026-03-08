@@ -1,6 +1,6 @@
+# Core dependencies
 numpy
 pandas
-geopandas
 matplotlib
 scipy
 seaborn
@@ -11,5 +11,14 @@ h5py
 openpyxl
 pyproj
 shapely
-GDAL
+
+# Geospatial extras
+# Note: on Windows, install geopandas and GDAL via conda or OSGeo4W
+# if pip install fails.
+geopandas
 fiona
+GDAL
+
+# Temporal/holiday modeling (pinned — API changed in newer versions)
+prophet==1.1.1
+holidays==0.24

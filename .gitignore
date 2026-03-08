@@ -33,9 +33,30 @@ desktop.ini
 *.hdf5
 *.nc
 *.zarr/
+*.xlsx
+*.xls
+*.csv
+
+# Logs and temp files
+*.log
+*.tmp
+note.txt
+
+# Environment files (never commit secrets)
+.env
+.env.*
+
+# Claude AI tooling (local only)
+.claude/
 
 # Archives
 *.zip
 *.rar
 *.7z
 *.tar.gz
+
+# Demo outputs (generated, not source)
+demo/figs/
+demo/*.xlsx
+demo/*.xls
+demo/*.csv

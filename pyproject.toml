@@ -1,0 +1,86 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "appgeopy"
+version = "1.0.0"
+description = "A Python package for processing and analyzing geospatial time-series data."
+readme = "README.md"
+license = { text = "MIT" }
+authors = [
+    { name = "David Nguyen", email = "vinhtruongkhtn@gmail.com" }
+]
+requires-python = ">=3.8"
+keywords = ["geospatial", "time-series", "GPS", "InSAR", "groundwater", "remote sensing"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: GIS",
+    "Topic :: Scientific/Engineering :: Hydrology",
+]
+
+# Core dependencies — always required
+dependencies = [
+    "numpy",
+    "pandas",
+    "matplotlib",
+    "scipy",
+    "seaborn",
+    "scikit-learn",
+    "xarray",
+    "ruptures",
+    "h5py",
+    "openpyxl",
+    "pyproj",
+    "shapely",
+]
+
+[project.optional-dependencies]
+# Geospatial extras — GDAL and fiona can be tricky to install on Windows;
+# install manually via conda or OSGeo4W if pip install fails.
+geo = [
+    "geopandas",
+    "fiona",
+    "GDAL",
+]
+
+# Temporal/holiday modeling (pinned due to API instability)
+timeseries = [
+    "prophet==1.1.1",
+    "holidays==0.24",
+]
+
+# Everything above combined
+full = [
+    "appgeopy[geo]",
+    "appgeopy[timeseries]",
+]
+
+# Development tools
+dev = [
+    "pytest",
+    "pytest-cov",
+    "black",
+    "ruff",
+    "mypy",
+]
+
+[project.urls]
+Homepage = "https://github.com/david-ncu2019/appgeopy"
+Repository = "https://github.com/david-ncu2019/appgeopy"
+"Bug Tracker" = "https://github.com/david-ncu2019/appgeopy/issues"
+
+[tool.setuptools.packages.find]
+# Auto-discover all packages (appgeopy and all subpackages)
+where = ["."]
+include = ["appgeopy*", "core*", "timeseriestools*", "insartools*", "gwatertools*", "mlcwtools*"]
+exclude = ["tests*", "demo*", "tutorials*", "build*", "dist*"]
+
+[tool.setuptools.package-data]
+"*" = ["*.txt", "*.md"]
